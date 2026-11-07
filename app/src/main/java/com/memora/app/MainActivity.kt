@@ -3,6 +3,8 @@ package com.memora.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -42,6 +46,30 @@ class MainActivity : ComponentActivity() {
 private fun MemoraApp() {
     var scanning by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
+    var scanResult by remember { mutableStateOf<StorageScanResult?>(null) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val runScan: () -> Unit = {
+        scanning = true
+        scanMessage = null
+        scope.launch {
+            try {
+                scanResult = StorageScanner.scan(context)
+                scanMessage = "اسکن با موفقیت انجام شد"
+            } catch (e: Exception) {
+                scanMessage = "خطا در اسکن: ${e.localizedMessage ?: "دسترسی ممکن نیست"}"
+            } finally {
+                scanning = false
+            }
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (grants.values.all { it }) runScan()
+        else scanMessage = "برای شمارش عکس‌ها، ویدئوها و موسیقی باید مجوز دسترسی را بدهی."
+    }
 
     MaterialTheme(
         colorScheme = darkColorScheme(
@@ -96,7 +124,7 @@ private fun MemoraApp() {
                             Column(Modifier.weight(1f)) {
                                 Text("حافظه داخلی", color = SoftText, fontSize = 13.sp)
                                 Spacer(Modifier.height(5.dp))
-                                Text("آماده اسکن", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                                Text(if (scanResult == null) "آماده اسکن" else "اسکن انجام شد", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                             }
                             Box(
                                 Modifier.size(68.dp).background(
@@ -110,30 +138,43 @@ private fun MemoraApp() {
                         }
                         Spacer(Modifier.height(18.dp))
                         LinearProgressIndicator(
-                            progress = { 0f },
+                            progress = { if (scanning) 0.65f else if (scanResult != null) 1f else 0f },
                             modifier = Modifier.fillMaxWidth().height(9.dp),
                             color = Purple,
                             trackColor = Color(0xFF28304A)
                         )
                         Spacer(Modifier.height(10.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("پس از اسکن، میزان مصرف نمایش داده می‌شود", color = SoftText, fontSize = 11.sp)
-                            Text("--", color = White, fontWeight = FontWeight.Bold)
+                            Text(scanResult?.let { "فضای اشغال‌شده: ${StorageScanner.formatBytes(it.usedBytes)}" } ?: "پس از اسکن، میزان مصرف نمایش داده می‌شود", color = SoftText, fontSize = 11.sp)
+                            Text(scanResult?.let { "${it.mediaCount} فایل" } ?: "--", color = White, fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.height(20.dp))
                         Button(
-                            onClick = { scanning = !scanning },
+                            onClick = {
+                                if (scanning) {
+                                    scanning = false
+                                } else if (StorageScanner.hasRequiredPermissions(context)) {
+                                    runScan()
+                                } else {
+                                    val permissions = StorageScanner.requiredPermissions()
+                                    if (permissions.isEmpty()) runScan() else permissionLauncher.launch(permissions)
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Purple)
                         ) {
                             Icon(if (scanning) Icons.Rounded.Pause else Icons.Rounded.Search, null)
                             Spacer(Modifier.width(9.dp))
-                            Text(if (scanning) "توقف اسکن" else "شروع اسکن حافظه", fontWeight = FontWeight.Bold)
+                            Text(if (scanning) "در حال اسکن..." else if (scanResult != null) "اسکن دوباره" else "شروع اسکن حافظه", fontWeight = FontWeight.Bold)
                         }
-                        if (scanning) {
+                        if (scanning || scanMessage != null) {
                             Spacer(Modifier.height(10.dp))
-                            Text("زیرساخت اسکن در مرحله بعدی فعال می‌شود.", color = SoftText, fontSize = 11.sp)
+                            Text(if (scanning) "در حال خواندن اطلاعات رسانه‌های قابل دسترس..." else scanMessage.orEmpty(), color = SoftText, fontSize = 11.sp)
+                        }
+                        scanResult?.let { result ->
+                            Spacer(Modifier.height(8.dp))
+                            Text("حافظه کل: ${StorageScanner.formatBytes(result.totalBytes)}  •  آزاد: ${StorageScanner.formatBytes(result.freeBytes)}", color = SoftText, fontSize = 11.sp)
                         }
                     }
                 }
@@ -145,13 +186,14 @@ private fun MemoraApp() {
                     Text("پس از اسکن", color = Purple, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(12.dp))
+                val result = scanResult
                 val categories = listOf(
-                    Triple("تصاویر", Icons.Rounded.Image, "۰ فایل"),
-                    Triple("ویدئوها", Icons.Rounded.VideoLibrary, "۰ فایل"),
-                    Triple("موسیقی", Icons.Rounded.MusicNote, "۰ فایل"),
-                    Triple("اسناد", Icons.Rounded.Description, "۰ فایل"),
-                    Triple("فایل‌های فشرده", Icons.Rounded.FolderZip, "۰ فایل"),
-                    Triple("برنامه‌ها", Icons.Rounded.Android, "۰ برنامه")
+                    Triple("تصاویر", Icons.Rounded.Image, result?.let { "${it.images.count} فایل • ${StorageScanner.formatBytes(it.images.bytes)}" } ?: "پس از اسکن"),
+                    Triple("ویدئوها", Icons.Rounded.VideoLibrary, result?.let { "${it.videos.count} فایل • ${StorageScanner.formatBytes(it.videos.bytes)}" } ?: "پس از اسکن"),
+                    Triple("موسیقی", Icons.Rounded.MusicNote, result?.let { "${it.audio.count} فایل • ${StorageScanner.formatBytes(it.audio.bytes)}" } ?: "پس از اسکن"),
+                    Triple("اسناد", Icons.Rounded.Description, "در مرحله بعد"),
+                    Triple("فایل‌های فشرده", Icons.Rounded.FolderZip, "در مرحله بعد"),
+                    Triple("برنامه‌ها", Icons.Rounded.Android, "در مرحله بعد")
                 )
                 categories.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
