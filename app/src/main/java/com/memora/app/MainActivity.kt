@@ -47,7 +47,10 @@ private fun MemoraApp() {
     var scanning by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var scanResult by remember { mutableStateOf<StorageScanResult?>(null) }
-    var scanMessage by remember { mutableStateOf<String?>(null) }\n    var treeResult by remember { mutableStateOf<TreeScanResult?>(null) }\n    var treeScanning by remember { mutableStateOf(false) }\n    var treeMessage by remember { mutableStateOf<String?>(null) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }
+    var treeResult by remember { mutableStateOf<TreeScanResult?>(null) }
+    var treeScanning by remember { mutableStateOf(false) }
+    var treeMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val runScan: () -> Unit = {
