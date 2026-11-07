@@ -92,6 +92,62 @@ object TreeStorageManager {
         success to failed
     }
 
+    suspend fun copyOrMoveEntry(
+        context: Context,
+        sourceTreeUri: Uri,
+        entry: ManagedEntry,
+        destinationTreeUri: Uri,
+        move: Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
+        val sourceRoot = DocumentFile.fromTreeUri(context, sourceTreeUri) ?: return@withContext false
+        val destination = DocumentFile.fromTreeUri(context, destinationTreeUri) ?: return@withContext false
+        var source = sourceRoot
+        for (part in entry.relativePath.split("/").filter { it.isNotBlank() }) {
+            source = source.findFile(part) ?: return@withContext false
+        }
+        if (!source.canRead() || !destination.canWrite()) return@withContext false
+
+        suspend fun copyNode(node: DocumentFile, parent: DocumentFile): DocumentFile {
+            if (node.isDirectory) {
+                val newDir = parent.createDirectory(node.name ?: "پوشه")
+                    ?: throw IllegalStateException("ساخت پوشه مقصد ناموفق بود")
+                node.listFiles().forEach { child -> copyNode(child, newDir) }
+                return newDir
+            }
+            val target = parent.createFile(node.type ?: "application/octet-stream", node.name ?: "file")
+                ?: throw IllegalStateException("ساخت فایل مقصد ناموفق بود")
+            try {
+                context.contentResolver.openInputStream(node.uri).use { input ->
+                    context.contentResolver.openOutputStream(target.uri, "w").use { output ->
+                        if (input == null || output == null) throw IllegalStateException("فایل باز نشد")
+                        input.copyTo(output)
+                        output.flush()
+                    }
+                }
+            } catch (e: Exception) {
+                target.delete()
+                throw e
+            }
+            return target
+        }
+
+        suspend fun deleteNode(node: DocumentFile): Boolean {
+            if (node.isDirectory) {
+                var allDeleted = true
+                node.listFiles().forEach { child -> if (!deleteNode(child)) allDeleted = false }
+                if (!allDeleted) return false
+            }
+            return node.delete()
+        }
+
+        try {
+            copyNode(source, destination)
+            if (move) deleteNode(source) else true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun copyOrMove(
         context: Context,
         sourceUri: Uri,
