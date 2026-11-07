@@ -80,6 +80,9 @@ private fun MemoraApp() {
     var pendingEntry by remember { mutableStateOf<ManagedEntry?>(null) }
     var pendingTransferEntries by remember { mutableStateOf<List<ManagedEntry>>(emptyList()) }
     var duplicateGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
+    var similarGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
+    var similarBusy by remember { mutableStateOf(false) }
+    var similarChecked by remember { mutableStateOf(false) }
     var duplicateBusy by remember { mutableStateOf(false) }
     var duplicateChecked by remember { mutableStateOf(false) }
     var cleanSelection by remember { mutableStateOf(setOf<Uri>()) }
@@ -111,6 +114,8 @@ private fun MemoraApp() {
                 )
                 duplicateGroups = emptyList()
                 duplicateChecked = false
+                similarGroups = emptyList()
+                similarChecked = false
                 cleanSelection = emptySet()
                 message = "اسکن کامل شد • ${tree?.files?.size ?: 0} فایل"
                 selected = emptySet()
@@ -228,10 +233,20 @@ private fun MemoraApp() {
                     onOpenClean = { tab = 2 }
                 )
                 2 -> CleanupScreen(
-                    tree = tree, duplicateGroups = duplicateGroups, busy = busy,
-                    duplicateBusy = duplicateBusy, duplicateChecked = duplicateChecked,
+                    tree = tree, duplicateGroups = duplicateGroups, similarGroups = similarGroups, busy = busy,
+                    duplicateBusy = duplicateBusy, duplicateChecked = duplicateChecked, similarBusy = similarBusy, similarChecked = similarChecked,
                     selection = cleanSelection,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
+                    onFindSimilar = {
+                        similarBusy = true
+                        scope.launch {
+                            try {
+                                similarGroups = TreeStorageManager.findSimilarNames(tree?.files.orEmpty())
+                                similarChecked = true
+                            } catch (e: Exception) { message = "خطا در بررسی نام‌های مشابه: ${e.localizedMessage}" }
+                            finally { similarBusy = false }
+                        }
+                    },
                     onFindDuplicates = {
                         val files = tree?.files.orEmpty()
                         duplicateBusy = true
@@ -510,9 +525,9 @@ private fun FilesScreen(
 
 @Composable
 private fun CleanupScreen(
-    tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, busy: Boolean,
-    duplicateBusy: Boolean, duplicateChecked: Boolean, selection: Set<Uri>,
-    onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit,
+    tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, similarGroups: List<List<ManagedEntry>>, busy: Boolean,
+    duplicateBusy: Boolean, duplicateChecked: Boolean, similarBusy: Boolean, similarChecked: Boolean, selection: Set<Uri>,
+    onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit,
     onToggle: (Uri) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
     val large = tree?.largestFiles.orEmpty()
@@ -548,6 +563,16 @@ private fun CleanupScreen(
         Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
         oldFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(10.dp))
+        Text("نسخه‌های احتمالی با نام مشابه", color = White, fontWeight = FontWeight.Bold)
+        Button(onClick = onFindSimilar, enabled = tree != null && !busy && !similarBusy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
+            Text(if (similarBusy) "در حال بررسی نام‌ها..." else "بررسی فایل‌های هم‌نام")
+        }
+        if (similarChecked) {
+            val similarItems = similarGroups.flatten()
+            Text("${similarGroups.size} گروه نام مشابه • ${similarItems.size} فایل (نیازمند بررسی دستی)", color = SoftText, fontSize = 11.sp)
+            similarItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy) }
+        }
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
         Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
             Text(if (duplicateBusy) "در حال بررسی..." else "بررسی فایل‌های تکراری")
