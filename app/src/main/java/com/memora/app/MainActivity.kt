@@ -125,7 +125,7 @@ private fun MemoraApp() {
                 }
                 IconButton(onClick = { dialog = "settings" }) { Icon(Icons.Rounded.Settings, "تنظیمات", tint = SoftText) }
             }
-            when (tab) {
+            Column(Modifier.fillMaxSize()) {\n            when (tab) {
                 0 -> HomeScreen(
                     tree = tree, busy = busy, message = message,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
@@ -264,7 +264,7 @@ private fun ColumnScope.HomeScreen(
     onPick: () -> Unit, onRefresh: () -> Unit, onFiles: () -> Unit,
     onCategory: (String) -> Unit, onClean: () -> Unit, onApps: () -> Unit
 ) {
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("داشبورد حافظه", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("آمار واقعی پوشه انتخاب‌شده", color = SoftText, fontSize = 12.sp)
         Spacer(Modifier.height(12.dp))
