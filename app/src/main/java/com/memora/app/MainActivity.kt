@@ -325,7 +325,7 @@ private fun FilesScreen(
     onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
     onSort: () -> Unit, onToggle: (Uri) -> Unit, onSelectAll: (List<ManagedEntry>) -> Unit,
     onCreateFolder: () -> Unit, onOpen: (ManagedEntry) -> Unit, onRename: (ManagedEntry) -> Unit, onDelete: (ManagedEntry) -> Unit,
-    onMove: () -> Unit, onDeleteSelected: () -> Unit, onOpenClean: () -> Unit
+    onMove: () -> Unit, onCopy: () -> Unit, onDeleteSelected: () -> Unit, onOpenClean: () -> Unit
 ) {
     val filtered = tree?.entries.orEmpty().filter { entry ->
         val categoryOk = when (filter) {
