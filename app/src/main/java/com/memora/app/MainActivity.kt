@@ -234,11 +234,18 @@ private fun MemoraApp() {
                     refresh()
                 } else dialog = ""
             }) { dialog = "" }
-            "deleteOne" -> ConfirmDialog("حذف فایل", "«${pendingEntry?.name}» حذف شود؟ این کار ممکن است قابل بازگشت نباشد.", {
+            "deleteOne" -> ConfirmDialog("حذف مورد", "«${pendingEntry?.name}» حذف شود؟ این کار ممکن است قابل بازگشت نباشد.", {
                 val item = pendingEntry
                 if (item != null) scope.launch {
-                    val ok = TreeStorageManager.delete(context, item.uri)
-                    message = if (ok) "فایل حذف شد" else "حذف فایل ممکن نشد"
+                    val ok = if (item.isDirectory) {
+                        val descendants = tree?.entries.orEmpty()
+                            .filter { it.relativePath.startsWith(item.relativePath + "/") }
+                            .sortedByDescending { it.relativePath.split("/").size }
+                            .map { it.uri }
+                        if (descendants.isNotEmpty()) TreeStorageManager.deleteMany(context, descendants)
+                        TreeStorageManager.delete(context, item.uri)
+                    } else TreeStorageManager.delete(context, item.uri)
+                    message = if (ok) "مورد حذف شد" else "حذف ممکن نشد؛ ممکن است دسترسی پوشه محدود باشد"
                     dialog = ""
                     refresh()
                 } else dialog = ""
@@ -387,10 +394,8 @@ private fun FilesScreen(
                         Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable { if (!item.isDirectory) onOpen(item) })
                         Text(if (item.isDirectory) item.relativePath else "${StorageScanner.formatBytes(item.size)} • ${item.relativePath}", color = SoftText, fontSize = 10.sp, maxLines = 1)
                     }
-                    if (!item.isDirectory) {
-                        IconButton(onClick = { onRename(item) }) { Icon(Icons.Rounded.Edit, "تغییر نام", tint = Purple) }
-                        IconButton(onClick = { onDelete(item) }) { Icon(Icons.Rounded.Delete, "حذف", tint = Danger) }
-                    }
+                    IconButton(onClick = { onRename(item) }) { Icon(Icons.Rounded.Edit, "تغییر نام", tint = Purple) }
+                    IconButton(onClick = { onDelete(item) }) { Icon(Icons.Rounded.Delete, "حذف", tint = Danger) }
                 }
                 Divider(color = Color(0xFF252C43))
             }
