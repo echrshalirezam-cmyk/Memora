@@ -310,17 +310,17 @@ private fun MemoraApp() {
             }) { dialog = "" }
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
-                    val ordered = selected.sortedByDescending { uri -> tree?.entries?.firstOrNull { it.uri == uri }?.relativePath?.split("/")?.size ?: 0 }
-                    val result = TreeStorageManager.deleteMany(context, ordered)
+                    val currentTree = tree
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, currentTree, selected.toList()) else 0 to selected.size
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     dialog = ""
                     refresh()
                 }
             }) { dialog = "" }
-            "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} فایل انتخاب‌شده حذف شود؟", {
+            "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} مورد انتخاب‌شده (شامل محتویات پوشه‌های انتخابی) حذف شود؟", {
                 scope.launch {
-                    val ordered = cleanSelection.sortedByDescending { uri -> tree?.entries?.firstOrNull { it.uri == uri }?.relativePath?.split("/")?.size ?: 0 }
-                    val result = TreeStorageManager.deleteMany(context, ordered)
+                    val currentTree = tree
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, currentTree, cleanSelection.toList()) else 0 to cleanSelection.size
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     cleanSelection = emptySet()
                     dialog = ""
@@ -516,6 +516,7 @@ private fun CleanupScreen(
     onToggle: (Uri) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
     val large = tree?.largestFiles.orEmpty()
+    val largeFolders = tree?.largestFolders.orEmpty()
     val empty = tree?.emptyFolders.orEmpty()
     val duplicateItems = duplicateGroups.flatten()
     val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
@@ -529,6 +530,9 @@ private fun CleanupScreen(
         }
         Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
         large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = !busy && !duplicateBusy) }
+        Spacer(Modifier.height(8.dp))
+        Text("پوشه‌های حجیم", color = White, fontWeight = FontWeight.Bold)
+        largeFolders.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(12.dp))
         Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
         empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
