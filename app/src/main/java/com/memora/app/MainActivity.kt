@@ -521,13 +521,50 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
 
 @Composable
 private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
+    val context = LocalContext.current
+    var appQuery by remember { mutableStateOf("") }
+    val apps = remember {
+        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        context.packageManager.queryIntentActivities(launcherIntent, 0)
+            .mapNotNull { it.activityInfo?.applicationInfo }
+            .distinctBy { it.packageName }
+            .filter { it.packageName != context.packageName }
+            .sortedBy { it.loadLabel(context.packageManager).toString().lowercase() }
+    }
+    val visibleApps = apps.filter {
+        it.loadLabel(context.packageManager).toString().contains(appQuery, true) ||
+            it.packageName.contains(appQuery, true)
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-        Text("مدیریت نصب، حذف و پاک‌سازی کش برنامه‌ها تحت کنترل اندروید است.", color = SoftText, fontSize = 12.sp)
-        ActionCard("مدیریت همه برنامه‌ها", "مشاهده، توقف یا حذف برنامه‌ها از تنظیمات سیستم", onAppSettings)
+        Text("${apps.size} برنامه قابل مشاهده در فهرست برنامه‌های اجراشدنی", color = SoftText, fontSize = 11.sp)
+        OutlinedTextField(value = appQuery, onValueChange = { appQuery = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("جستجوی برنامه") })
+        ActionCard("مدیریت همه برنامه‌ها", "مشاهده جزئیات، مجوزها و حذف از تنظیمات اندروید", onAppSettings)
         ActionCard("فضای ذخیره‌سازی دستگاه", "بررسی مصرف حافظه و ابزار آزادسازی فضای اندروید", onStorageSettings)
         ActionCard("مجوزهای MEMORA", "مدیریت دسترسی‌های همین برنامه", onPermissions)
-        Text("محدودیت مهم: اندروید به برنامه‌های عادی اجازه پاک‌کردن کش یا داده خصوصی سایر برنامه‌ها را نمی‌دهد. برای جلوگیری از حذف ناخواسته، این عملیات به صفحه رسمی سیستم هدایت می‌شود.", color = SoftText, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        visibleApps.forEach { app ->
+            val label = app.loadLabel(context.packageManager).toString()
+            Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(label, color = White, fontWeight = FontWeight.SemiBold)
+                    Text(app.packageName, color = SoftText, fontSize = 10.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            val launch = context.packageManager.getLaunchIntentForPackage(app.packageName)
+                            if (launch != null) context.startActivity(launch)
+                        }) { Text("اجرا") }
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.packageName}")))
+                        }) { Text("اطلاعات و کش") }
+                        TextButton(onClick = {
+                            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
+                        }) { Text("حذف", color = Danger) }
+                    }
+                }
+            }
+        }
+        Text("محدودیت اندروید: پاک‌کردن مستقیم کش یا داده خصوصی برنامه‌های دیگر در اختیار MEMORA نیست؛ دکمه «اطلاعات و کش» صفحه رسمی همان برنامه را باز می‌کند. حذف نیز با تأیید خود اندروید انجام می‌شود.", color = SoftText, fontSize = 11.sp)
     }
 }
 
