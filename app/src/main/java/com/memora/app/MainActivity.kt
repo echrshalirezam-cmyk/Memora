@@ -47,7 +47,7 @@ private fun MemoraApp() {
     var scanning by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     var scanResult by remember { mutableStateOf<StorageScanResult?>(null) }
-    var scanMessage by remember { mutableStateOf<String?>(null) }
+    var scanMessage by remember { mutableStateOf<String?>(null) }\n    var treeResult by remember { mutableStateOf<TreeScanResult?>(null) }\n    var treeScanning by remember { mutableStateOf(false) }\n    var treeMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val runScan: () -> Unit = {
@@ -69,6 +69,32 @@ private fun MemoraApp() {
     ) { grants ->
         if (grants.values.all { it }) runScan()
         else scanMessage = "برای شمارش عکس‌ها، ویدئوها و موسیقی باید مجوز دسترسی را بدهی."
+    }
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                treeScanning = true
+                treeMessage = null
+                scope.launch {
+                    try {
+                        treeResult = TreeStorageScanner.scan(context, uri)
+                        treeMessage = "اسکن پوشه با موفقیت تمام شد"
+                    } catch (e: Exception) {
+                        treeMessage = "خطا: ${e.localizedMessage ?: "دسترسی ممکن نیست"}"
+                    } finally {
+                        treeScanning = false
+                    }
+                }
+            } catch (e: Exception) {
+                treeMessage = "امکان دریافت مجوز پوشه وجود نداشت"
+            }
+        }
     }
 
     MaterialTheme(
@@ -182,6 +208,47 @@ private fun MemoraApp() {
                         scanResult?.let { result ->
                             Spacer(Modifier.height(8.dp))
                             Text("حافظه کل: ${StorageScanner.formatBytes(result.totalBytes)}  •  آزاد: ${StorageScanner.formatBytes(result.freeBytes)}", color = SoftText, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Panel),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("اسکن پوشه یا کارت حافظه", color = White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Spacer(Modifier.height(5.dp))
+                        Text("یک پوشه از حافظه داخلی یا microSD انتخاب کن؛ دسترسی آن برای اسکن‌های بعدی حفظ می‌شود.", color = SoftText, fontSize = 11.sp)
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedButton(
+                            onClick = { folderPicker.launch(null) },
+                            enabled = !treeScanning,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(Icons.Rounded.FolderOpen, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (treeScanning) "در حال اسکن پوشه..." else "انتخاب پوشه / کارت حافظه")
+                        }
+                        treeMessage?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(it, color = SoftText, fontSize = 11.sp)
+                        }
+                        treeResult?.let { tree ->
+                            Spacer(Modifier.height(10.dp))
+                            Text(tree.rootName, color = White, fontWeight = FontWeight.SemiBold)
+                            Text("${tree.fileCount} فایل • ${tree.folderCount} پوشه • ${StorageScanner.formatBytes(tree.totalBytes)}", color = SoftText, fontSize = 12.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Text("بزرگ‌ترین فایل‌های این پوشه", color = Purple, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            tree.largestFiles.take(5).forEach { file ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text(file.name, color = White, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                                    Text(StorageScanner.formatBytes(file.size), color = SoftText, fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
