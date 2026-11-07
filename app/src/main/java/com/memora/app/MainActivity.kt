@@ -126,7 +126,7 @@ private fun MemoraApp() {
                 }
                 IconButton(onClick = { dialog = "settings" }) { Icon(Icons.Rounded.Settings, "تنظیمات", tint = SoftText) }
             }
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 0 -> HomeScreen(
                     tree = tree, busy = busy, message = message,
@@ -332,7 +332,7 @@ private fun FilesScreen(
         categoryOk && entry.name.contains(query, true)
     }.let { if (sortLargeFirst) it.sortedWith(compareByDescending<ManagedEntry> { e -> e.isDirectory }.thenByDescending { e -> e.size }) else it.sortedBy { e -> e.name.lowercase() } }
 
-    Column(Modifier.weight(1f).fillMaxWidth()) {
+    Column(Modifier.fillMaxSize()) {
         Text("مدیریت فایل‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPick, modifier = Modifier.weight(1f)) { Text("انتخاب حافظه") }
@@ -435,7 +435,7 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
 
 @Composable
 private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("مدیریت نصب، حذف و پاک‌سازی کش برنامه‌ها تحت کنترل اندروید است.", color = SoftText, fontSize = 12.sp)
         ActionCard("مدیریت همه برنامه‌ها", "مشاهده، توقف یا حذف برنامه‌ها از تنظیمات سیستم", onAppSettings)
