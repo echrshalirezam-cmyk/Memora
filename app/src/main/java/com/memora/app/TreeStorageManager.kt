@@ -32,6 +32,19 @@ data class ManagedTree(
 }
 
 object TreeStorageManager {
+    private fun uniqueName(parent: DocumentFile, requested: String): String {
+        if (parent.findFile(requested) == null) return requested
+        val dot = requested.lastIndexOf('.')
+        val base = if (dot > 0) requested.substring(0, dot) else requested
+        val extension = if (dot > 0) requested.substring(dot) else ""
+        var index = 1
+        var candidate: String
+        do {
+            candidate = "$base ($index)$extension"
+            index++
+        } while (parent.findFile(candidate) != null)
+        return candidate
+    }
     suspend fun scan(
         context: Context,
         treeUri: Uri,
@@ -88,7 +101,7 @@ object TreeStorageManager {
                 parent = parent.findFile(part) ?: return@withContext false
             }
         }
-        if (!parent.isDirectory || !parent.canWrite() || name.isBlank() || name.contains("/")) return@withContext false
+        if (!parent.isDirectory || !parent.canWrite() || name.isBlank() || name.contains("/") || parent.findFile(name) != null) return@withContext false
         parent.createDirectory(name) != null
     }
 
@@ -137,12 +150,12 @@ object TreeStorageManager {
 
         suspend fun copyNode(node: DocumentFile, parent: DocumentFile): DocumentFile {
             if (node.isDirectory) {
-                val newDir = parent.createDirectory(node.name ?: "پوشه")
+                val newDir = parent.createDirectory(uniqueName(parent, node.name ?: "پوشه"))
                     ?: throw IllegalStateException("ساخت پوشه مقصد ناموفق بود")
                 node.listFiles().forEach { child -> copyNode(child, newDir) }
                 return newDir
             }
-            val target = parent.createFile(node.type ?: "application/octet-stream", node.name ?: "file")
+            val target = parent.createFile(node.type ?: "application/octet-stream", uniqueName(parent, node.name ?: "file"))
                 ?: throw IllegalStateException("ساخت فایل مقصد ناموفق بود")
             try {
                 context.contentResolver.openInputStream(node.uri).use { input ->
