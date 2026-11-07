@@ -528,13 +528,13 @@ private fun CleanupScreen(
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
         Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
-        large.forEach { item -> CleanupItem(item, selection, onToggle) }
+        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = enabled) }
         Spacer(Modifier.height(12.dp))
         Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
-        empty.forEach { folder -> CleanupItem(folder, selection, onToggle) }
+        empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(12.dp))
         Text("فایل‌های موقت و پشتیبان • ${tempFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
-        tempFiles.forEach { CleanupItem(it, selection, onToggle) }
+        tempFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(10.dp))
         Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
         oldFiles.forEach { CleanupItem(it, selection, onToggle) }
@@ -557,7 +557,7 @@ private fun CleanupScreen(
 }
 
 @Composable
-private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit) {
+private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit, enabled: Boolean = true) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) }, enabled = !busy && !duplicateBusy)
         Column(Modifier.weight(1f)) {
