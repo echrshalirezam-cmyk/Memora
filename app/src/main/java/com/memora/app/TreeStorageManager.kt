@@ -33,19 +33,8 @@ data class ManagedTree(
 }
 
 object TreeStorageManager {
-    private fun uniqueName(parent: DocumentFile, requested: String): String {
-        if (parent.findFile(requested) == null) return requested
-        val dot = requested.lastIndexOf('.')
-        val base = if (dot > 0) requested.substring(0, dot) else requested
-        val extension = if (dot > 0) requested.substring(dot) else ""
-        var index = 1
-        var candidate: String
-        do {
-            candidate = "$base ($index)$extension"
-            index++
-        } while (parent.findFile(candidate) != null)
-        return candidate
-    }
+    private fun uniqueName(parent: DocumentFile, requested: String): String =
+        StorageAlgorithms.uniqueName(requested) { candidate -> parent.findFile(candidate) != null }
     suspend fun scan(
         context: Context,
         treeUri: Uri,
@@ -91,14 +80,9 @@ object TreeStorageManager {
             all.add(ManagedEntry(child.name ?: "بدون نام", size, folder, child.uri, child.type, child.lastModified(), path))
             if ((index + 1) % 10 == 0 || index == total - 1) onProgress(index + 1, total)
         }
-        val folderSizes = mutableMapOf<String, Long>()
-        all.filter { !it.isDirectory && it.size > 0L }.forEach { file ->
-            var parentPath = file.relativePath.substringBeforeLast("/", "")
-            while (parentPath.isNotBlank()) {
-                folderSizes[parentPath] = (folderSizes[parentPath] ?: 0L) + file.size
-                parentPath = parentPath.substringBeforeLast("/", "")
-            }
-        }
+        val folderSizes = StorageAlgorithms.aggregateFolderSizes(
+            all.filter { !it.isDirectory }.map { it.relativePath to it.size }
+        )
         val sizedEntries = all.map { entry ->
             if (entry.isDirectory) entry.copy(size = folderSizes[entry.relativePath] ?: 0L) else entry
         }
@@ -212,18 +196,11 @@ object TreeStorageManager {
     }
 
     suspend fun findSimilarNames(entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.Default) {
-        fun normalized(name: String): String {
-            var stem = name.substringBeforeLast(".", name).lowercase().trim()
-            stem = stem.replace(Regex("""\s*\(\d+\)$"""), "")
-            stem = stem.replace(Regex("""\s*(copy|نسخه)\s*\d*$"""), "")
-            return stem.trim()
-        }
-        entries.filter { !it.isDirectory }
-            .map { normalized(it.name) to it }
-            .filter { it.first.length >= 3 }
-            .groupBy({ it.first }, { it.second })
-            .values.filter { it.size > 1 }
-            .sortedByDescending { group -> group.sumOf { it.size } }
+        StorageAlgorithms.groupSimilarNames(
+            entries.filter { !it.isDirectory },
+            name = { it.name },
+            size = { it.size }
+        )
     }
 
     suspend fun findDuplicates(context: Context, entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.IO) {
