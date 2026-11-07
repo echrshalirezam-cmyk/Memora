@@ -528,7 +528,7 @@ private fun CleanupScreen(
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
         Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
-        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = enabled) }
+        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(12.dp))
         Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
         empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
@@ -537,7 +537,7 @@ private fun CleanupScreen(
         tempFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(10.dp))
         Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
-        oldFiles.forEach { CleanupItem(it, selection, onToggle) }
+        oldFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(10.dp))
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
         Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
@@ -545,7 +545,7 @@ private fun CleanupScreen(
         }
         if (duplicateChecked) {
             Text("${duplicateGroups.size} گروه تکراری • ${duplicateItems.size} فایل", color = SoftText, fontSize = 11.sp)
-            duplicateItems.forEach { CleanupItem(it, selection, onToggle) }
+            duplicateItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         }
         if (selection.isNotEmpty()) {
             Button(onClick = onDeleteSelected, enabled = !busy && !duplicateBusy, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
@@ -559,7 +559,7 @@ private fun CleanupScreen(
 @Composable
 private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit, enabled: Boolean = true) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) }, enabled = !busy && !duplicateBusy)
+        Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) }, enabled = enabled)
         Column(Modifier.weight(1f)) {
             Text(item.name, color = White, fontSize = 11.sp, maxLines = 1)
             Text(StorageScanner.formatBytes(item.size), color = SoftText, fontSize = 10.sp)
