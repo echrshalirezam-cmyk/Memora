@@ -67,6 +67,7 @@ private fun MemoraApp() {
     var targetUri by remember { mutableStateOf<Uri?>(null) }
     var moveMode by remember { mutableStateOf(true) }
     var pendingEntry by remember { mutableStateOf<ManagedEntry?>(null) }
+    var pendingTransferEntries by remember { mutableStateOf<List<ManagedEntry>>(emptyList()) }
     var duplicateGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
     var duplicateBusy by remember { mutableStateOf(false) }
     var duplicateChecked by remember { mutableStateOf(false) }
@@ -157,14 +158,16 @@ private fun MemoraApp() {
                     onRename = { item -> pendingEntry = item; nameInput = item.name; dialog = "rename" },
                     onDelete = { item -> pendingEntry = item; dialog = "deleteOne" },
                     onMove = {
-                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }
-                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = true; destinationPicker.launch(null) }
-                        else message = "برای انتقال، ابتدا فایل‌ها را انتخاب کن."
+                        val chosen = selected.mapNotNull { uri -> tree?.entries?.firstOrNull { it.uri == uri } }
+                        val topLevel = chosen.filterNot { entry -> chosen.any { parent -> parent.isDirectory && entry.relativePath.startsWith(parent.relativePath + "/") } }
+                        if (topLevel.isNotEmpty()) { pendingTransferEntries = topLevel; selected = topLevel.map { it.uri }.toSet(); moveMode = true; destinationPicker.launch(null) }
+                        else message = "ابتدا فایل یا پوشه‌ای را برای انتقال انتخاب کن."
                     },
                     onCopy = {
-                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }
-                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = false; destinationPicker.launch(null) }
-                        else message = "برای کپی، ابتدا فایل‌ها را انتخاب کن."
+                        val chosen = selected.mapNotNull { uri -> tree?.entries?.firstOrNull { it.uri == uri } }
+                        val topLevel = chosen.filterNot { entry -> chosen.any { parent -> parent.isDirectory && entry.relativePath.startsWith(parent.relativePath + "/") } }
+                        if (topLevel.isNotEmpty()) { pendingTransferEntries = topLevel; selected = topLevel.map { it.uri }.toSet(); moveMode = false; destinationPicker.launch(null) }
+                        else message = "ابتدا فایل یا پوشه‌ای را برای کپی انتخاب کن."
                     },
                     onDeleteSelected = { dialog = "deleteSelected" },
                     onOpenClean = { tab = 2 }
@@ -269,14 +272,20 @@ private fun MemoraApp() {
                     refresh()
                 }
             }) { dialog = "" }
-            "moveConfirm" -> ConfirmDialog("انتقال فایل‌ها", if (moveMode) "تعداد ${selected.size} فایل به پوشه مقصد منتقل می‌شود؛ پس از کپی موفق از مبدأ حذف خواهد شد." else "تعداد ${selected.size} فایل در پوشه مقصد کپی می‌شود. فایل اصلی باقی می‌ماند.", {
+            "moveConfirm" -> ConfirmDialog("انتقال فایل‌ها", if (moveMode) "تعداد ${pendingTransferEntries.size} مورد (فایل/پوشه) به مقصد منتقل می‌شود." else "تعداد ${pendingTransferEntries.size} مورد (فایل/پوشه) در مقصد کپی می‌شود. اصل موارد باقی می‌ماند.", {
                 val dest = targetUri
                 if (dest != null) scope.launch {
                     var ok = 0
                     var failed = 0
-                    selected.forEach { uri ->
+                    val sourceRoot = treeUri
+                    if (sourceRoot == dest) {
+                        message = "برای جلوگیری از کپی تکراری، مقصد باید پوشه دیگری باشد."
+                        dialog = ""
+                        return@launch
+                    }
+                    pendingTransferEntries.forEach { entry ->
                         try {
-                            if (TreeStorageManager.copyOrMove(context, uri, dest, moveMode)) ok++ else failed++
+                            if (sourceRoot != null && TreeStorageManager.copyOrMoveEntry(context, sourceRoot, entry, dest, moveMode)) ok++ else failed++
                         } catch (_: Exception) { failed++ }
                     }
                     message = "$ok فایل منتقل شد؛ $failed مورد ناموفق بود"
