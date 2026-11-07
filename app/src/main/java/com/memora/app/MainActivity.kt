@@ -145,6 +145,12 @@ private fun MemoraApp() {
                     onToggle = { uri -> selected = if (uri in selected) selected - uri else selected + uri },
                     onSelectAll = { items -> selected = if (selected.size == items.size) emptySet() else items.map { it.uri }.toSet() },
                     onCreateFolder = { nameInput = ""; dialog = "createFolder" },
+                    onOpen = { item ->
+                        try {
+                            val viewIntent = Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, item.mimeType ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            context.startActivity(Intent.createChooser(viewIntent, "باز کردن فایل"))
+                        } catch (_: Exception) { message = "برنامه‌ای برای باز کردن این نوع فایل پیدا نشد." }
+                    },
                     onRename = { item -> pendingEntry = item; nameInput = item.name; dialog = "rename" },
                     onDelete = { item -> pendingEntry = item; dialog = "deleteOne" },
                     onMove = {
@@ -318,7 +324,7 @@ private fun FilesScreen(
     selected: Set<Uri>, sortLargeFirst: Boolean,
     onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
     onSort: () -> Unit, onToggle: (Uri) -> Unit, onSelectAll: (List<ManagedEntry>) -> Unit,
-    onCreateFolder: () -> Unit, onRename: (ManagedEntry) -> Unit, onDelete: (ManagedEntry) -> Unit,
+    onCreateFolder: () -> Unit, onOpen: (ManagedEntry) -> Unit, onRename: (ManagedEntry) -> Unit, onDelete: (ManagedEntry) -> Unit,
     onMove: () -> Unit, onDeleteSelected: () -> Unit, onOpenClean: () -> Unit
 ) {
     val filtered = tree?.entries.orEmpty().filter { entry ->
@@ -369,7 +375,7 @@ private fun FilesScreen(
                     Checkbox(checked = item.uri in selected, onCheckedChange = { onToggle(item.uri) })
                     Text(if (item.isDirectory) "📁" else "📄", modifier = Modifier.padding(end = 7.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1)
+                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable { if (!item.isDirectory) onOpen(item) })
                         Text(if (item.isDirectory) item.relativePath else "${StorageScanner.formatBytes(item.size)} • ${item.relativePath}", color = SoftText, fontSize = 10.sp, maxLines = 1)
                     }
                     if (!item.isDirectory) {
