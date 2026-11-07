@@ -113,20 +113,26 @@ object TreeStorageManager {
         val bySize = entries.filter { !it.isDirectory && it.size > 0L }.groupBy { it.size }.values.filter { it.size > 1 }
         val groups = mutableListOf<List<ManagedEntry>>()
         for (sameSize in bySize) {
-            val byHash = sameSize.groupBy { entry ->
-                val digest = MessageDigest.getInstance("SHA-256")
-                context.contentResolver.openInputStream(entry.uri).use { input ->
-                    if (input == null) "unreadable" else {
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            digest.update(buffer, 0, read)
+            val hashed = sameSize.mapNotNull { entry ->
+                try {
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    val hash = context.contentResolver.openInputStream(entry.uri).use { input ->
+                        if (input == null) null else {
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                digest.update(buffer, 0, read)
+                            }
+                            digest.digest().joinToString("") { byte -> "%02x".format(byte) }
                         }
-                        digest.digest().joinToString("") { "%02x".format(it) }
                     }
+                    if (hash == null) null else hash to entry
+                } catch (_: Exception) {
+                    null
                 }
             }
+            val byHash = hashed.groupBy({ it.first }, { it.second })
             byHash.values.filter { it.size > 1 }.forEach { groups.add(it) }
         }
         groups
