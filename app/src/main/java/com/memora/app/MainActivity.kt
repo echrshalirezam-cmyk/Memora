@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 private val Night = Color(0xFF080B16)
 private val Panel = Color(0xFF11172A)
@@ -58,6 +62,11 @@ private fun MemoraApp() {
     var treeUri by remember { mutableStateOf<Uri?>(null) }
     var tree by remember { mutableStateOf<ManagedTree?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var scanProgress by remember { mutableFloatStateOf(0f) }
+    var scanProgressText by remember { mutableStateOf("") }
+    var scanPaused by remember { mutableStateOf(false) }
+    val pauseFlow = remember { MutableStateFlow(false) }
+    var scanJob by remember { mutableStateOf<Job?>(null) }
     var message by remember { mutableStateOf("برای شروع، حافظه داخلی یا کارت حافظه را انتخاب کن.") }
     var filter by remember { mutableStateOf("همه") }
     var currentFolderPath by remember { mutableStateOf("") }
@@ -77,18 +86,44 @@ private fun MemoraApp() {
 
     fun refresh() {
         val uri = treeUri ?: return
+        if (busy) return
         busy = true
-        scope.launch {
+        scanPaused = false
+        pauseFlow.value = false
+        scanProgress = 0f
+        scanProgressText = "آماده‌سازی اسکن..."
+        scanJob = scope.launch {
             try {
-                tree = TreeStorageManager.scan(context, uri)
+                tree = TreeStorageManager.scan(
+                    context,
+                    uri,
+                    pauseCheck = { pauseFlow.first { paused -> !paused } },
+                    onProgress = { done, total ->
+                        withContext(Dispatchers.Main) {
+                            if (total <= 0) {
+                                scanProgressText = "در حال پیمایش پوشه‌ها • $done مورد"
+                            } else {
+                                scanProgress = if (total == 0) 1f else done.toFloat() / total.toFloat()
+                                scanProgressText = "بررسی فایل‌ها و پوشه‌ها: $done از $total • ${(scanProgress * 100).toInt()}٪"
+                            }
+                        }
+                    }
+                )
                 duplicateGroups = emptyList()
                 duplicateChecked = false
                 cleanSelection = emptySet()
                 message = "اسکن کامل شد • ${tree?.files?.size ?: 0} فایل"
                 selected = emptySet()
+            } catch (e: CancellationException) {
+                message = "اسکن به درخواست کاربر متوقف شد."
             } catch (e: Exception) {
                 message = "خطا در اسکن: ${e.localizedMessage ?: "دسترسی ممکن نیست"}"
-            } finally { busy = false }
+            } finally {
+                busy = false
+                scanPaused = false
+                pauseFlow.value = false
+                scanJob = null
+            }
         }
     }
 
@@ -150,7 +185,9 @@ private fun MemoraApp() {
             Column(Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 0 -> HomeScreen(
-                    tree = tree, busy = busy, message = message,
+                    tree = tree, busy = busy, message = message, scanProgress = scanProgress, scanProgressText = scanProgressText, scanPaused = scanPaused,
+                    onPause = { scanPaused = !scanPaused; pauseFlow.value = scanPaused },
+                    onCancelScan = { scanJob?.cancel() },
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
                     onFiles = { filter = "همه"; tab = 1 },
                     onCategory = { filter = it; tab = 1 },
@@ -342,6 +379,15 @@ private fun ColumnScope.HomeScreen(
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = onPick, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text(if (busy) "در حال اسکن..." else "انتخاب حافظه / کارت SD") }
                 OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth(), enabled = tree != null && !busy) { Text("اسکن دوباره") }
+                if (busy) {
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(progress = { scanProgress }, modifier = Modifier.fillMaxWidth(), color = Purple)
+                    Text(scanProgressText, color = SoftText, fontSize = 11.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onPause, modifier = Modifier.weight(1f)) { Text(if (scanPaused) "ادامه اسکن" else "مکث اسکن") }
+                        TextButton(onClick = onCancelScan) { Text("توقف", color = Danger) }
+                    }
+                }
                 Text(message, color = SoftText, fontSize = 11.sp)
             }
         }
