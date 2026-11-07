@@ -127,7 +127,7 @@ private fun MemoraApp() {
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Purple)
                         ) {
-                            Icon(if (scanning) Icons.Rounded.Pause else Icons.Rounded.Radar, null)
+                            Icon(if (scanning) Icons.Rounded.Pause else Icons.Rounded.Search, null)
                             Spacer(Modifier.width(9.dp))
                             Text(if (scanning) "توقف اسکن" else "شروع اسکن حافظه", fontWeight = FontWeight.Bold)
                         }
