@@ -58,6 +58,7 @@ private fun MemoraApp() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("برای شروع، حافظه داخلی یا کارت حافظه را انتخاب کن.") }
     var filter by remember { mutableStateOf("همه") }
+    var currentFolderPath by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<Uri>()) }
     var sortLargeFirst by remember { mutableStateOf(true) }
@@ -93,6 +94,7 @@ private fun MemoraApp() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
                 treeUri = uri
+                currentFolderPath = ""
                 tree = null
                 selected = emptySet()
                 refresh()
@@ -138,7 +140,7 @@ private fun MemoraApp() {
                 )
                 1 -> FilesScreen(
                     tree = tree, busy = busy, message = message, filter = filter, query = query,
-                    selected = selected, sortLargeFirst = sortLargeFirst,
+                    selected = selected, sortLargeFirst = sortLargeFirst, currentFolderPath = currentFolderPath,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
                     onFilter = { filter = it }, onQuery = { query = it },
                     onSort = { sortLargeFirst = !sortLargeFirst },
@@ -146,7 +148,7 @@ private fun MemoraApp() {
                     onSelectAll = { items -> selected = if (selected.size == items.size) emptySet() else items.map { it.uri }.toSet() },
                     onCreateFolder = { nameInput = ""; dialog = "createFolder" },
                     onOpen = { item ->
-                        try {
+                        if (item.isDirectory) { currentFolderPath = item.relativePath; selected = emptySet() } else try {
                             val viewIntent = Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, item.mimeType ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             context.startActivity(Intent.createChooser(viewIntent, "باز کردن فایل"))
                         } catch (_: Exception) { message = "برنامه‌ای برای باز کردن این نوع فایل پیدا نشد." }
@@ -216,7 +218,7 @@ private fun MemoraApp() {
             "createFolder" -> TextEntryDialog("ساخت پوشه جدید", nameInput, { nameInput = it }, {
                 val uri = treeUri
                 if (uri != null) scope.launch {
-                    val ok = TreeStorageManager.createFolder(context, uri, nameInput.trim())
+                    val ok = TreeStorageManager.createFolderInPath(context, uri, currentFolderPath, nameInput.trim())
                     message = if (ok) "پوشه ساخته شد" else "ساخت پوشه ممکن نشد"
                     dialog = ""
                     refresh()
@@ -321,13 +323,14 @@ private fun ColumnScope.HomeScreen(
 @Composable
 private fun FilesScreen(
     tree: ManagedTree?, busy: Boolean, message: String, filter: String, query: String,
-    selected: Set<Uri>, sortLargeFirst: Boolean,
+    selected: Set<Uri>, sortLargeFirst: Boolean, currentFolderPath: String,
     onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
     onSort: () -> Unit, onToggle: (Uri) -> Unit, onSelectAll: (List<ManagedEntry>) -> Unit,
     onCreateFolder: () -> Unit, onOpen: (ManagedEntry) -> Unit, onRename: (ManagedEntry) -> Unit, onDelete: (ManagedEntry) -> Unit,
     onMove: () -> Unit, onCopy: () -> Unit, onDeleteSelected: () -> Unit, onOpenClean: () -> Unit
 ) {
     val filtered = tree?.entries.orEmpty().filter { entry ->
+        val inCurrentFolder = if (query.isNotBlank()) true else entry.relativePath.substringBeforeLast("/", "") == currentFolderPath
         val categoryOk = when (filter) {
             "تصاویر" -> entry.mimeType?.startsWith("image/") == true
             "ویدئوها" -> entry.mimeType?.startsWith("video/") == true
@@ -338,11 +341,16 @@ private fun FilesScreen(
             "سایر" -> entry.mimeType?.startsWith("image/") != true && entry.mimeType?.startsWith("video/") != true && entry.mimeType?.startsWith("audio/") != true
             else -> true
         }
-        categoryOk && entry.name.contains(query, true)
+        inCurrentFolder && categoryOk && entry.name.contains(query, true)
     }.let { if (sortLargeFirst) it.sortedWith(compareByDescending<ManagedEntry> { e -> e.isDirectory }.thenByDescending { e -> e.size }) else it.sortedBy { e -> e.name.lowercase() } }
 
     Column(Modifier.fillMaxSize()) {
         Text("مدیریت فایل‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        if (currentFolderPath.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { }) { Text("مسیر: $currentFolderPath", color = SoftText) }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPick, modifier = Modifier.weight(1f)) { Text("انتخاب حافظه") }
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("بروزرسانی") }
