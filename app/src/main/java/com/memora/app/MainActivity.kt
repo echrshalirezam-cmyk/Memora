@@ -523,7 +523,8 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
 private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
     val context = LocalContext.current
     var appQuery by remember { mutableStateOf("") }
-    val apps = remember {
+    var appListRevision by remember { mutableIntStateOf(0) }
+    val apps = remember(appListRevision) {
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         context.packageManager.queryIntentActivities(launcherIntent, 0)
             .mapNotNull { it.activityInfo?.applicationInfo }
@@ -539,6 +540,7 @@ private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit,
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("${apps.size} برنامه قابل مشاهده در فهرست برنامه‌های اجراشدنی", color = SoftText, fontSize = 11.sp)
         OutlinedTextField(value = appQuery, onValueChange = { appQuery = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("جستجوی برنامه") })
+        TextButton(onClick = { appListRevision++ }) { Text("بروزرسانی فهرست برنامه‌ها") }
         ActionCard("مدیریت همه برنامه‌ها", "مشاهده جزئیات، مجوزها و حذف از تنظیمات اندروید", onAppSettings)
         ActionCard("فضای ذخیره‌سازی دستگاه", "بررسی مصرف حافظه و ابزار آزادسازی فضای اندروید", onStorageSettings)
         ActionCard("مجوزهای MEMORA", "مدیریت دسترسی‌های همین برنامه", onPermissions)
