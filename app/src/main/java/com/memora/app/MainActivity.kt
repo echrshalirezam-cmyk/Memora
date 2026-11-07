@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -258,7 +259,7 @@ private fun MemoraApp() {
 }
 
 @Composable
-private fun HomeScreen(
+private fun ColumnScope.HomeScreen(
     tree: ManagedTree?, busy: Boolean, message: String,
     onPick: () -> Unit, onRefresh: () -> Unit, onFiles: () -> Unit,
     onCategory: (String) -> Unit, onClean: () -> Unit, onApps: () -> Unit
@@ -298,7 +299,7 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun FilesScreen(
+private fun ColumnScope.FilesScreen(
     tree: ManagedTree?, busy: Boolean, message: String, filter: String, query: String,
     selected: Set<Uri>, sortLargeFirst: Boolean,
     onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
@@ -371,7 +372,7 @@ private fun FilesScreen(
 }
 
 @Composable
-private fun CleanupScreen(
+private fun ColumnScope.CleanupScreen(
     tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, busy: Boolean,
     duplicateBusy: Boolean, duplicateChecked: Boolean, selection: Set<Uri>,
     onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit,
@@ -387,16 +388,11 @@ private fun CleanupScreen(
             Button(onClick = onPick, modifier = Modifier.weight(1f)) { Text("انتخاب حافظه") }
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
-        ActionCard("فایل‌های حجیم", "${large.size} فایل بزرگ شناسایی‌شده", {})
+        Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
         large.forEach { item -> CleanupItem(item, selection, onToggle) }
         Spacer(Modifier.height(12.dp))
-        ActionCard("پوشه‌های خالی", "${empty.size} پوشه خالی پیدا شد", {})
-        empty.forEach { folder ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("📁 ${folder.relativePath}", color = SoftText, modifier = Modifier.weight(1f))
-                Text("خالی", color = Purple, fontSize = 11.sp)
-            }
-        }
+        Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
+        empty.forEach { folder -> CleanupItem(folder, selection, onToggle) }
         Spacer(Modifier.height(12.dp))
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
         Button(onClick = onFindDuplicates, enabled = tree != null && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
@@ -427,7 +423,7 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
 }
 
 @Composable
-private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
+private fun ColumnScope.AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("مدیریت نصب، حذف و پاک‌سازی کش برنامه‌ها تحت کنترل اندروید است.", color = SoftText, fontSize = 12.sp)
