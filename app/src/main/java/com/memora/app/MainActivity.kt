@@ -355,6 +355,8 @@ private fun MemoraApp() {
 @Composable
 private fun ColumnScope.HomeScreen(
     tree: ManagedTree?, busy: Boolean, message: String,
+    scanProgress: Float, scanProgressText: String, scanPaused: Boolean,
+    onPause: () -> Unit, onCancelScan: () -> Unit,
     onPick: () -> Unit, onRefresh: () -> Unit, onFiles: () -> Unit,
     onCategory: (String) -> Unit, onClean: () -> Unit, onApps: () -> Unit
 ) {
