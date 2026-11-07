@@ -80,6 +80,9 @@ private fun MemoraApp() {
     var pendingEntry by remember { mutableStateOf<ManagedEntry?>(null) }
     var pendingTransferEntries by remember { mutableStateOf<List<ManagedEntry>>(emptyList()) }
     var duplicateGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
+    var sameNameGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
+    var sameNameBusy by remember { mutableStateOf(false) }
+    var sameNameChecked by remember { mutableStateOf(false) }
     var similarGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
     var similarBusy by remember { mutableStateOf(false) }
     var similarChecked by remember { mutableStateOf(false) }
@@ -116,6 +119,8 @@ private fun MemoraApp() {
                 duplicateChecked = false
                 similarGroups = emptyList()
                 similarChecked = false
+                sameNameGroups = emptyList()
+                sameNameChecked = false
                 cleanSelection = emptySet()
                 message = "اسکن کامل شد • ${tree?.files?.size ?: 0} فایل"
                 selected = emptySet()
@@ -233,10 +238,21 @@ private fun MemoraApp() {
                     onOpenClean = { tab = 2 }
                 )
                 2 -> CleanupScreen(
-                    tree = tree, duplicateGroups = duplicateGroups, similarGroups = similarGroups, busy = busy,
+                    tree = tree, duplicateGroups = duplicateGroups, similarGroups = similarGroups, sameNameGroups = sameNameGroups, busy = busy,
                     duplicateBusy = duplicateBusy, duplicateChecked = duplicateChecked, similarBusy = similarBusy, similarChecked = similarChecked,
+                    sameNameBusy = sameNameBusy, sameNameChecked = sameNameChecked,
                     selection = cleanSelection,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
+                    onFindSameNames = {
+                        sameNameBusy = true
+                        scope.launch {
+                            try {
+                                sameNameGroups = TreeStorageManager.findSameNames(tree?.files.orEmpty())
+                                sameNameChecked = true
+                            } catch (e: Exception) { message = "خطا در بررسی فایل‌های هم‌نام: ${e.localizedMessage}" }
+                            finally { sameNameBusy = false }
+                        }
+                    },
                     onFindSimilar = {
                         similarBusy = true
                         scope.launch {
@@ -525,9 +541,10 @@ private fun FilesScreen(
 
 @Composable
 private fun CleanupScreen(
-    tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, similarGroups: List<List<ManagedEntry>>, busy: Boolean,
-    duplicateBusy: Boolean, duplicateChecked: Boolean, similarBusy: Boolean, similarChecked: Boolean, selection: Set<Uri>,
-    onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit,
+    tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, similarGroups: List<List<ManagedEntry>>, sameNameGroups: List<List<ManagedEntry>>, busy: Boolean,
+    duplicateBusy: Boolean, duplicateChecked: Boolean, similarBusy: Boolean, similarChecked: Boolean,
+    sameNameBusy: Boolean, sameNameChecked: Boolean, selection: Set<Uri>,
+    onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit, onFindSameNames: () -> Unit,
     onToggle: (Uri) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
     val large = tree?.largestFiles.orEmpty()
@@ -554,8 +571,14 @@ private fun CleanupScreen(
         Text("پوشه‌های حجیم", color = White, fontWeight = FontWeight.Bold)
         largeFolders.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(12.dp))
-        Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
-        empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("پوشه‌های خالی • ${empty.size} مورد", color = White, fontWeight = FontWeight.Bold)
+                Text("فقط پوشه‌هایی که هنگام اسکن هیچ محتوایی نداشته‌اند.", color = SoftText, fontSize = 10.sp)
+                if (empty.isEmpty()) Text("موردی پیدا نشده است.", color = SoftText, fontSize = 11.sp)
+                empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy && !sameNameBusy) }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         Text("فایل‌های موقت و پشتیبان • ${tempFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
         tempFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
@@ -563,6 +586,25 @@ private fun CleanupScreen(
         Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
         oldFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(10.dp))
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                Text("فایل‌های هم‌نام", color = White, fontWeight = FontWeight.Bold)
+                Text("نام کامل و پسوند یکسان؛ حتی اگر فایل‌ها در پوشه‌های متفاوت باشند.", color = SoftText, fontSize = 10.sp)
+                Button(onClick = onFindSameNames, enabled = tree != null && !busy && !sameNameBusy && !duplicateBusy && !similarBusy, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (sameNameBusy) "در حال بررسی..." else "بررسی فایل‌های هم‌نام")
+                }
+                if (sameNameChecked) {
+                    val sameItems = sameNameGroups.flatten()
+                    Text("${sameNameGroups.size} گروه • ${sameItems.size} فایل", color = SoftText, fontSize = 11.sp)
+                    if (sameNameGroups.isEmpty()) Text("فایل هم‌نامی پیدا نشد.", color = SoftText, fontSize = 11.sp)
+                    sameNameGroups.forEachIndexed { index, group ->
+                        Text("گروه ${index + 1} • ${group.first().name}", color = Purple, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                        group.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !sameNameBusy && !duplicateBusy && !similarBusy) }
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
         Text("نسخه‌های احتمالی با نام مشابه", color = White, fontWeight = FontWeight.Bold)
         Button(onClick = onFindSimilar, enabled = tree != null && !busy && !similarBusy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
