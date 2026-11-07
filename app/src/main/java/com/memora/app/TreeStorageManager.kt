@@ -195,6 +195,14 @@ object TreeStorageManager {
         }
     }
 
+    suspend fun findSameNames(entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.Default) {
+        StorageAlgorithms.groupExactNames(
+            entries.filter { !it.isDirectory },
+            name = { it.name },
+            size = { it.size }
+        )
+    }
+
     suspend fun findSimilarNames(entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.Default) {
         StorageAlgorithms.groupSimilarNames(
             entries.filter { !it.isDirectory },
