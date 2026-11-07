@@ -549,7 +549,7 @@ private fun CleanupScreen(
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
         Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
-        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = !busy && !duplicateBusy) }
+        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy) }
         Spacer(Modifier.height(8.dp))
         Text("پوشه‌های حجیم", color = White, fontWeight = FontWeight.Bold)
         largeFolders.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
@@ -574,7 +574,7 @@ private fun CleanupScreen(
             similarItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy) }
         }
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
-        Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy && !similarBusy, modifier = Modifier.fillMaxWidth()) {
             Text(if (duplicateBusy) "در حال بررسی..." else "بررسی فایل‌های تکراری")
         }
         if (duplicateChecked) {
