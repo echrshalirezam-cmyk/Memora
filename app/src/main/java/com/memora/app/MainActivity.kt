@@ -137,12 +137,20 @@ private fun MemoraApp() {
                             }
                         }
                         Spacer(Modifier.height(18.dp))
-                        LinearProgressIndicator(
-                            progress = { if (scanning) 0.65f else if (scanResult != null) 1f else 0f },
-                            modifier = Modifier.fillMaxWidth().height(9.dp),
-                            color = Purple,
-                            trackColor = Color(0xFF28304A)
-                        )
+                        if (scanning) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().height(9.dp),
+                                color = Purple,
+                                trackColor = Color(0xFF28304A)
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { if (scanResult != null) 1f else 0f },
+                                modifier = Modifier.fillMaxWidth().height(9.dp),
+                                color = Purple,
+                                trackColor = Color(0xFF28304A)
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(scanResult?.let { "فضای اشغال‌شده: ${StorageScanner.formatBytes(it.usedBytes)}" } ?: "پس از اسکن، میزان مصرف نمایش داده می‌شود", color = SoftText, fontSize = 11.sp)
@@ -150,10 +158,9 @@ private fun MemoraApp() {
                         }
                         Spacer(Modifier.height(20.dp))
                         Button(
+                            enabled = !scanning,
                             onClick = {
-                                if (scanning) {
-                                    scanning = false
-                                } else if (StorageScanner.hasRequiredPermissions(context)) {
+                                if (StorageScanner.hasRequiredPermissions(context)) {
                                     runScan()
                                 } else {
                                     val permissions = StorageScanner.requiredPermissions()
