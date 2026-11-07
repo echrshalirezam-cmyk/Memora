@@ -2,6 +2,8 @@ package com.memora.app
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
+import android.os.StatFs
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -306,6 +308,15 @@ private fun ColumnScope.HomeScreen(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("داشبورد حافظه", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text("آمار واقعی پوشه انتخاب‌شده", color = SoftText, fontSize = 12.sp)
+        val primaryStats = remember {
+            runCatching {
+                val stat = StatFs(Environment.getExternalStorageDirectory().absolutePath)
+                (stat.blockCountLong * stat.blockSizeLong) to (stat.availableBlocksLong * stat.blockSizeLong)
+            }.getOrNull()
+        }
+        primaryStats?.let { stats ->
+            Text("حافظه داخلی دستگاه • کل ${StorageScanner.formatBytes(stats.first)} • آزاد ${StorageScanner.formatBytes(stats.second)}", color = SoftText, fontSize = 10.sp)
+        }
         Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.padding(16.dp)) {
@@ -320,12 +331,31 @@ private fun ColumnScope.HomeScreen(
         }
         Spacer(Modifier.height(16.dp))
         Text("دسته‌بندی فایل‌ها", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        val files = tree?.files.orEmpty()
+        fun filesFor(category: String): List<ManagedEntry> = files.filter { entry ->
+            val ext = entry.name.substringAfterLast('.', "").lowercase()
+            when (category) {
+                "همه" -> true
+                "تصاویر" -> entry.mimeType?.startsWith("image/") == true
+                "ویدئوها" -> entry.mimeType?.startsWith("video/") == true
+                "موسیقی" -> entry.mimeType?.startsWith("audio/") == true
+                "اسناد" -> ext in setOf("pdf","txt","doc","docx","xls","xlsx","ppt","pptx","odt","rtf")
+                "فشرده" -> ext in setOf("zip","rar","7z","tar","gz")
+                "APK" -> ext == "apk"
+                else -> entry.mimeType?.startsWith("image/") != true && entry.mimeType?.startsWith("video/") != true && entry.mimeType?.startsWith("audio/") != true && ext !in setOf("pdf","txt","doc","docx","xls","xlsx","ppt","pptx","odt","rtf","zip","rar","7z","tar","gz","apk")
+            }
+        }
         val cats = listOf("همه", "تصاویر", "ویدئوها", "موسیقی", "اسناد", "فشرده", "APK", "سایر")
         cats.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { cat ->
+                    val matches = filesFor(cat)
+                    val size = matches.sumOf { it.size }
                     Card(Modifier.weight(1f).padding(vertical = 4.dp).clickable { onCategory(cat) }, colors = CardDefaults.cardColors(containerColor = Panel)) {
-                        Text(cat, color = White, modifier = Modifier.padding(16.dp))
+                        Column(Modifier.padding(13.dp)) {
+                            Text(cat, color = White, fontWeight = FontWeight.SemiBold)
+                            Text("${matches.size} فایل • ${StorageScanner.formatBytes(size)}", color = SoftText, fontSize = 10.sp)
+                        }
                     }
                 }
             }
