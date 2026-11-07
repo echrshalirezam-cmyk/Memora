@@ -143,6 +143,7 @@ private fun MemoraApp() {
                     selected = selected, sortLargeFirst = sortLargeFirst, currentFolderPath = currentFolderPath,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
                     onFilter = { filter = it }, onQuery = { query = it },
+                    onBackFolder = { currentFolderPath = currentFolderPath.substringBeforeLast("/", "") },
                     onSort = { sortLargeFirst = !sortLargeFirst },
                     onToggle = { uri -> selected = if (uri in selected) selected - uri else selected + uri },
                     onSelectAll = { items -> selected = if (selected.size == items.size) emptySet() else items.map { it.uri }.toSet() },
@@ -324,7 +325,7 @@ private fun ColumnScope.HomeScreen(
 private fun FilesScreen(
     tree: ManagedTree?, busy: Boolean, message: String, filter: String, query: String,
     selected: Set<Uri>, sortLargeFirst: Boolean, currentFolderPath: String,
-    onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
+    onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit, onBackFolder: () -> Unit,
     onSort: () -> Unit, onToggle: (Uri) -> Unit, onSelectAll: (List<ManagedEntry>) -> Unit,
     onCreateFolder: () -> Unit, onOpen: (ManagedEntry) -> Unit, onRename: (ManagedEntry) -> Unit, onDelete: (ManagedEntry) -> Unit,
     onMove: () -> Unit, onCopy: () -> Unit, onDeleteSelected: () -> Unit, onOpenClean: () -> Unit
@@ -348,7 +349,7 @@ private fun FilesScreen(
         Text("مدیریت فایل‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         if (currentFolderPath.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { }) { Text("مسیر: $currentFolderPath", color = SoftText) }
+                TextButton(onClick = onBackFolder) { Text("← بازگشت از: $currentFolderPath", color = SoftText) }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
