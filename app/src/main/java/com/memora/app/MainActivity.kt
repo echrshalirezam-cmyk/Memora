@@ -540,7 +540,7 @@ private fun CleanupScreen(
         oldFiles.forEach { CleanupItem(it, selection, onToggle) }
         Spacer(Modifier.height(10.dp))
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
-        Button(onClick = onFindDuplicates, enabled = tree != null && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
+        Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
             Text(if (duplicateBusy) "در حال بررسی..." else "بررسی فایل‌های تکراری")
         }
         if (duplicateChecked) {
