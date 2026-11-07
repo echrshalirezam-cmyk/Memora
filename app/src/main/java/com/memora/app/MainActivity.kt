@@ -190,6 +190,7 @@ private fun MemoraApp() {
                     onPermissions = { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }
                 )
             }
+            }
             NavigationBar(containerColor = Color(0xFF0D1222)) {
                 NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, icon = { Icon(Icons.Rounded.Dashboard, null) }, label = { Text("خانه") })
                 NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, icon = { Icon(Icons.Rounded.Folder, null) }, label = { Text("فایل‌ها") })
