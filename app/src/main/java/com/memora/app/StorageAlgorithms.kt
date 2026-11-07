@@ -25,6 +25,18 @@ object StorageAlgorithms {
         return stem.trim()
     }
 
+    fun <T> groupExactNames(
+        items: List<T>,
+        name: (T) -> String,
+        size: (T) -> Long
+    ): List<List<T>> = items
+        .map { name(it).trim().lowercase() to it }
+        .filter { it.first.isNotBlank() }
+        .groupBy({ it.first }, { it.second })
+        .values
+        .filter { it.size > 1 }
+        .sortedByDescending { group -> group.sumOf(size) }
+
     fun <T> groupSimilarNames(
         items: List<T>,
         name: (T) -> String,
