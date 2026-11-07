@@ -292,7 +292,7 @@ private fun MemoraApp() {
                     refresh()
                 } else dialog = ""
             }) { dialog = "" }
-            "deleteOne" -> ConfirmDialog("حذف مورد", "«${pendingEntry?.name}» حذف شود؟ این کار ممکن است قابل بازگشت نباشد.", {
+            "deleteOne" -> ConfirmDialog("حذف مورد", if (pendingEntry?.isDirectory == true) "پوشه «${pendingEntry?.name}» همراه با تمام محتویاتش حذف شود؟ این کار ممکن است قابل بازگشت نباشد." else "«${pendingEntry?.name}» حذف شود؟ این کار ممکن است قابل بازگشت نباشد.", {
                 val item = pendingEntry
                 if (item != null) scope.launch {
                     val ok = if (item.isDirectory) {
@@ -308,7 +308,7 @@ private fun MemoraApp() {
                     refresh()
                 } else dialog = ""
             }) { dialog = "" }
-            "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
+            "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
                     val currentTree = tree
                     val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, currentTree, selected.toList()) else 0 to selected.size
