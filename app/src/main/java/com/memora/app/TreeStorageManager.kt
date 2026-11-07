@@ -56,6 +56,18 @@ object TreeStorageManager {
         ManagedTree(root.name ?: "حافظه انتخاب‌شده", all, empty, bytes)
     }
 
+    suspend fun createFolderInPath(context: Context, treeUri: Uri, relativePath: String, name: String): Boolean = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext false
+        var parent = root
+        if (relativePath.isNotBlank()) {
+            for (part in relativePath.split("/").filter { it.isNotBlank() }) {
+                parent = parent.findFile(part) ?: return@withContext false
+            }
+        }
+        if (!parent.isDirectory || !parent.canWrite() || name.isBlank() || name.contains("/")) return@withContext false
+        parent.createDirectory(name) != null
+    }
+
     suspend fun createFolder(context: Context, parentUri: Uri, name: String): Boolean = withContext(Dispatchers.IO) {
         val parent = DocumentFile.fromTreeUri(context, parentUri)
             ?: DocumentFile.fromSingleUri(context, parentUri)
