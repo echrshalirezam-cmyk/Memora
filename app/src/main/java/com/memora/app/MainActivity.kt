@@ -63,7 +63,8 @@ private fun MemoraApp() {
     var sortLargeFirst by remember { mutableStateOf(true) }
     var dialog by remember { mutableStateOf("") }
     var nameInput by remember { mutableStateOf("") }
-    var targetUri by remember { mutableStateOf<Uri?>(null) }\n    var moveMode by remember { mutableStateOf(true) }
+    var targetUri by remember { mutableStateOf<Uri?>(null) }
+    var moveMode by remember { mutableStateOf(true) }
     var pendingEntry by remember { mutableStateOf<ManagedEntry?>(null) }
     var duplicateGroups by remember { mutableStateOf<List<List<ManagedEntry>>>(emptyList()) }
     var duplicateBusy by remember { mutableStateOf(false) }
@@ -125,7 +126,8 @@ private fun MemoraApp() {
                 }
                 IconButton(onClick = { dialog = "settings" }) { Icon(Icons.Rounded.Settings, "تنظیمات", tint = SoftText) }
             }
-            Column(Modifier.weight(1f).fillMaxWidth()) {\n            when (tab) {
+            Column(Modifier.fillMaxSize()) {
+            when (tab) {
                 0 -> HomeScreen(
                     tree = tree, busy = busy, message = message,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
@@ -145,7 +147,16 @@ private fun MemoraApp() {
                     onCreateFolder = { nameInput = ""; dialog = "createFolder" },
                     onRename = { item -> pendingEntry = item; nameInput = item.name; dialog = "rename" },
                     onDelete = { item -> pendingEntry = item; dialog = "deleteOne" },
-                    onMove = {\n                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }\n                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = true; destinationPicker.launch(null) }\n                        else message = "برای انتقال، ابتدا فایل‌ها را انتخاب کن."\n                    },\n                    onCopy = {\n                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }\n                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = false; destinationPicker.launch(null) }\n                        else message = "برای کپی، ابتدا فایل‌ها را انتخاب کن."\n                    },
+                    onMove = {
+                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }
+                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = true; destinationPicker.launch(null) }
+                        else message = "برای انتقال، ابتدا فایل‌ها را انتخاب کن."
+                    },
+                    onCopy = {
+                        val fileUris = selected.filter { uri -> tree?.files?.any { it.uri == uri } == true }
+                        if (fileUris.isNotEmpty()) { selected = fileUris.toSet(); moveMode = false; destinationPicker.launch(null) }
+                        else message = "برای کپی، ابتدا فایل‌ها را انتخاب کن."
+                    },
                     onDeleteSelected = { dialog = "deleteSelected" },
                     onOpenClean = { tab = 2 }
                 )
@@ -299,7 +310,7 @@ private fun ColumnScope.HomeScreen(
 }
 
 @Composable
-private fun ColumnScope.FilesScreen(
+private fun FilesScreen(
     tree: ManagedTree?, busy: Boolean, message: String, filter: String, query: String,
     selected: Set<Uri>, sortLargeFirst: Boolean,
     onPick: () -> Unit, onRefresh: () -> Unit, onFilter: (String) -> Unit, onQuery: (String) -> Unit,
@@ -372,7 +383,7 @@ private fun ColumnScope.FilesScreen(
 }
 
 @Composable
-private fun ColumnScope.CleanupScreen(
+private fun CleanupScreen(
     tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, busy: Boolean,
     duplicateBusy: Boolean, duplicateChecked: Boolean, selection: Set<Uri>,
     onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit,
@@ -381,7 +392,7 @@ private fun ColumnScope.CleanupScreen(
     val large = tree?.largestFiles.orEmpty()
     val empty = tree?.emptyFolders.orEmpty()
     val duplicateItems = duplicateGroups.flatten()
-    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("پاک‌سازی هوشمند", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("هیچ موردی بدون انتخاب و تأیید تو حذف نمی‌شود.", color = SoftText, fontSize = 11.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -423,7 +434,7 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
 }
 
 @Composable
-private fun ColumnScope.AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
+private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
     Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("مدیریت نصب، حذف و پاک‌سازی کش برنامه‌ها تحت کنترل اندروید است.", color = SoftText, fontSize = 12.sp)
