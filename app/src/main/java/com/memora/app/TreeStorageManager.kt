@@ -211,6 +211,21 @@ object TreeStorageManager {
         }
     }
 
+    suspend fun findSimilarNames(entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.Default) {
+        fun normalized(name: String): String {
+            var stem = name.substringBeforeLast(".", name).lowercase().trim()
+            stem = stem.replace(Regex("""\s*\(\d+\)$"""), "")
+            stem = stem.replace(Regex("""\s*(copy|نسخه)\s*\d*$"""), "")
+            return stem.trim()
+        }
+        entries.filter { !it.isDirectory }
+            .map { normalized(it.name) to it }
+            .filter { it.first.length >= 3 }
+            .groupBy({ it.first }, { it.second })
+            .values.filter { it.size > 1 }
+            .sortedByDescending { group -> group.sumOf { it.size } }
+    }
+
     suspend fun findDuplicates(context: Context, entries: List<ManagedEntry>): List<List<ManagedEntry>> = withContext(Dispatchers.IO) {
         val bySize = entries.filter { !it.isDirectory && it.size > 0L }.groupBy { it.size }.values.filter { it.size > 1 }
         val groups = mutableListOf<List<ManagedEntry>>()
