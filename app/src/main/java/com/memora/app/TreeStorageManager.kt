@@ -105,14 +105,6 @@ object TreeStorageManager {
         parent.createDirectory(name) != null
     }
 
-    suspend fun createFolder(context: Context, parentUri: Uri, name: String): Boolean = withContext(Dispatchers.IO) {
-        val parent = DocumentFile.fromTreeUri(context, parentUri)
-            ?: DocumentFile.fromSingleUri(context, parentUri)
-            ?: return@withContext false
-        if (!parent.canWrite() || name.isBlank() || name.contains('/')) return@withContext false
-        parent.createDirectory(name) != null
-    }
-
     suspend fun rename(context: Context, uri: Uri, newName: String): Boolean = withContext(Dispatchers.IO) {
         if (newName.isBlank() || newName.contains('/')) return@withContext false
         DocumentFile.fromSingleUri(context, uri)?.renameTo(newName) ?: false
@@ -186,35 +178,6 @@ object TreeStorageManager {
             if (move) deleteNode(source) else true
         } catch (_: Exception) {
             false
-        }
-    }
-
-    suspend fun copyOrMove(
-        context: Context,
-        sourceUri: Uri,
-        destinationTreeUri: Uri,
-        move: Boolean
-    ): Boolean = withContext(Dispatchers.IO) {
-        val source = DocumentFile.fromSingleUri(context, sourceUri) ?: return@withContext false
-        val destination = DocumentFile.fromTreeUri(context, destinationTreeUri) ?: return@withContext false
-        if (!source.isFile || !source.canRead() || !destination.canWrite()) return@withContext false
-        val target = destination.createFile(source.type ?: "application/octet-stream", source.name ?: "file")
-            ?: return@withContext false
-        try {
-            context.contentResolver.openInputStream(source.uri).use { input ->
-                context.contentResolver.openOutputStream(target.uri, "w").use { output ->
-                    if (input == null || output == null) throw IllegalStateException("جریان فایل باز نشد")
-                    input.copyTo(output)
-                    output.flush()
-                }
-            }
-            if (move && !source.delete()) {
-                target.delete()
-                false
-            } else true
-        } catch (e: Exception) {
-            target.delete()
-            throw e
         }
     }
 
