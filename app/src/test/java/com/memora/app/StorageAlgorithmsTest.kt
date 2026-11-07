@@ -23,6 +23,16 @@ class StorageAlgorithmsTest {
         assertEquals("sample", StorageAlgorithms.normalizeSimilarName("Sample نسخه 3.avi"))
     }
 
+    @Test fun exactNameGroupsMatchFullFilenameAcrossFoldersAndIgnoreCase() {
+        data class Item(val name: String, val path: String, val bytes: Long)
+        val groups = StorageAlgorithms.groupExactNames(
+            listOf(Item("photo.jpg", "A/photo.jpg", 10), Item("PHOTO.JPG", "B/PHOTO.JPG", 20), Item("photo.png", "C/photo.png", 30)),
+            name = { it.name }, size = { it.bytes }
+        )
+        assertEquals(1, groups.size)
+        assertEquals(listOf("A/photo.jpg", "B/PHOTO.JPG"), groups.single().map { it.path })
+    }
+
     @Test fun similarNameGroupsExcludeDirectoriesAndSortByTotalSize() {
         data class Item(val name: String, val bytes: Long, val folder: Boolean = false)
         val input = listOf(
