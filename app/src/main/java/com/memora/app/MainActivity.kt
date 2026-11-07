@@ -125,7 +125,7 @@ private fun MemoraApp() {
                 }
                 IconButton(onClick = { dialog = "settings" }) { Icon(Icons.Rounded.Settings, "تنظیمات", tint = SoftText) }
             }
-            Column(Modifier.fillMaxSize()) {\n            when (tab) {
+            Column(Modifier.weight(1f).fillMaxWidth()) {\n            when (tab) {
                 0 -> HomeScreen(
                     tree = tree, busy = busy, message = message,
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
