@@ -89,6 +89,15 @@ private fun MemoraApp() {
         }
     }
 
+    LaunchedEffect(Unit) {
+        val saved = context.getSharedPreferences("memora_settings", android.content.Context.MODE_PRIVATE)
+            .getString("last_tree_uri", null)
+        if (saved != null) {
+            treeUri = Uri.parse(saved)
+            refresh()
+        }
+    }
+
     val rootPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             try {
@@ -97,6 +106,7 @@ private fun MemoraApp() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
                 treeUri = uri
+                context.getSharedPreferences("memora_settings", android.content.Context.MODE_PRIVATE).edit().putString("last_tree_uri", uri.toString()).apply()
                 currentFolderPath = ""
                 tree = null
                 selected = emptySet()
