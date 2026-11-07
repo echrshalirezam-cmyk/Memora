@@ -189,8 +189,8 @@ private fun MemoraApp() {
                     onPause = { scanPaused = !scanPaused; pauseFlow.value = scanPaused },
                     onCancelScan = { scanJob?.cancel() },
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
-                    onFiles = { filter = "همه"; tab = 1 },
-                    onCategory = { filter = it; tab = 1 },
+                    onFiles = { filter = "همه"; currentFolderPath = ""; tab = 1 },
+                    onCategory = { filter = it; currentFolderPath = ""; tab = 1 },
                     onClean = { tab = 2 },
                     onApps = { tab = 3 }
                 )
