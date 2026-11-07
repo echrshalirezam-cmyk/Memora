@@ -2,6 +2,7 @@ package com.memora.app
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -106,6 +107,10 @@ object TreeStorageManager {
             source = source.findFile(part) ?: return@withContext false
         }
         if (!source.canRead() || !destination.canWrite()) return@withContext false
+        val sourceDocumentId = DocumentsContract.getDocumentId(source.uri)
+        val destinationDocumentId = DocumentsContract.getTreeDocumentId(destinationTreeUri)
+        if (source.isDirectory && (destinationDocumentId == sourceDocumentId || destinationDocumentId.startsWith("$sourceDocumentId/"))) return@withContext false
+        if (!source.isDirectory && sourceDocumentId.substringBeforeLast("/", "") == destinationDocumentId) return@withContext false
 
         suspend fun copyNode(node: DocumentFile, parent: DocumentFile): DocumentFile {
             if (node.isDirectory) {
