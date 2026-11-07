@@ -81,6 +81,9 @@ private fun MemoraApp() {
         scope.launch {
             try {
                 tree = TreeStorageManager.scan(context, uri)
+                duplicateGroups = emptyList()
+                duplicateChecked = false
+                cleanSelection = emptySet()
                 message = "اسکن کامل شد • ${tree?.files?.size ?: 0} فایل"
                 selected = emptySet()
             } catch (e: Exception) {
@@ -109,6 +112,9 @@ private fun MemoraApp() {
                 context.getSharedPreferences("memora_settings", android.content.Context.MODE_PRIVATE).edit().putString("last_tree_uri", uri.toString()).apply()
                 currentFolderPath = ""
                 tree = null
+                duplicateGroups = emptyList()
+                duplicateChecked = false
+                cleanSelection = emptySet()
                 selected = emptySet()
                 refresh()
             } catch (e: Exception) {
@@ -395,7 +401,7 @@ private fun FilesScreen(
             "اسناد" -> entry.name.substringAfterLast('.', "").lowercase() in setOf("pdf","txt","doc","docx","xls","xlsx","ppt","pptx","odt","rtf")
             "فشرده" -> entry.name.substringAfterLast('.', "").lowercase() in setOf("zip","rar","7z","tar","gz")
             "APK" -> entry.name.endsWith(".apk", true)
-            "سایر" -> entry.mimeType?.startsWith("image/") != true && entry.mimeType?.startsWith("video/") != true && entry.mimeType?.startsWith("audio/") != true
+            "سایر" -> entry.mimeType?.startsWith("image/") != true && entry.mimeType?.startsWith("video/") != true && entry.mimeType?.startsWith("audio/") != true && entry.name.substringAfterLast('.', "").lowercase() !in setOf("pdf","txt","doc","docx","xls","xlsx","ppt","pptx","odt","rtf","zip","rar","7z","tar","gz","apk")
             else -> true
         }
         inCurrentFolder && categoryOk && entry.name.contains(query, true)
