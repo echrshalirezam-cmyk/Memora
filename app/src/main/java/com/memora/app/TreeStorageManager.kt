@@ -29,6 +29,7 @@ data class ManagedTree(
     val files: List<ManagedEntry> get() = entries.filter { !it.isDirectory }
     val folders: List<ManagedEntry> get() = entries.filter { it.isDirectory }
     val largestFiles: List<ManagedEntry> get() = files.sortedByDescending { it.size }.take(30)
+    val largestFolders: List<ManagedEntry> get() = folders.filter { it.size > 0L }.sortedByDescending { it.size }.take(20)
 }
 
 object TreeStorageManager {
@@ -90,7 +91,36 @@ object TreeStorageManager {
             all.add(ManagedEntry(child.name ?: "بدون نام", size, folder, child.uri, child.type, child.lastModified(), path))
             if ((index + 1) % 10 == 0 || index == total - 1) onProgress(index + 1, total)
         }
-        ManagedTree(root.name ?: "حافظه انتخاب‌شده", all, empty, bytes)
+        val folderSizes = mutableMapOf<String, Long>()
+        all.filter { !it.isDirectory && it.size > 0L }.forEach { file ->
+            var parentPath = file.relativePath.substringBeforeLast("/", "")
+            while (parentPath.isNotBlank()) {
+                folderSizes[parentPath] = (folderSizes[parentPath] ?: 0L) + file.size
+                parentPath = parentPath.substringBeforeLast("/", "")
+            }
+        }
+        val sizedEntries = all.map { entry ->
+            if (entry.isDirectory) entry.copy(size = folderSizes[entry.relativePath] ?: 0L) else entry
+        }
+        val sizedEmpty = empty.map { folder ->
+            folder.copy(size = folderSizes[folder.relativePath] ?: 0L)
+        }
+        ManagedTree(root.name ?: "حافظه انتخاب‌شده", sizedEntries, sizedEmpty, bytes)
+    }
+
+    suspend fun deleteSelection(context: Context, tree: ManagedTree, uris: List<Uri>): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        val selected = tree.entries.filter { it.uri in uris }
+        val expanded = selected.toMutableList()
+        selected.filter { it.isDirectory }.forEach { folder ->
+            expanded.addAll(tree.entries.filter { it.relativePath.startsWith(folder.relativePath + "/") })
+        }
+        val ordered = expanded.distinctBy { it.uri }.sortedByDescending { it.relativePath.split("/").size }
+        var success = 0
+        var failed = 0
+        ordered.forEach { entry ->
+            if (DocumentFile.fromSingleUri(context, entry.uri)?.delete() == true) success++ else failed++
+        }
+        success to failed
     }
 
     suspend fun createFolderInPath(context: Context, treeUri: Uri, relativePath: String, name: String): Boolean = withContext(Dispatchers.IO) {
