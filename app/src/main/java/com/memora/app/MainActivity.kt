@@ -154,7 +154,7 @@ private fun MemoraApp() {
                         Spacer(Modifier.height(10.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(scanResult?.let { "فضای اشغال‌شده: ${StorageScanner.formatBytes(it.usedBytes)}" } ?: "پس از اسکن، میزان مصرف نمایش داده می‌شود", color = SoftText, fontSize = 11.sp)
-                            Text(scanResult?.let { "${it.mediaCount} فایل" } ?: "--", color = White, fontWeight = FontWeight.Bold)
+                            Text(scanResult?.let { "${it.indexedFileCount} فایل" } ?: "--", color = White, fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.height(20.dp))
                         Button(
@@ -177,7 +177,7 @@ private fun MemoraApp() {
                         }
                         if (scanning || scanMessage != null) {
                             Spacer(Modifier.height(10.dp))
-                            Text(if (scanning) "در حال خواندن اطلاعات رسانه‌های قابل دسترس..." else scanMessage.orEmpty(), color = SoftText, fontSize = 11.sp)
+                            Text(if (scanning) "در حال خواندن فایل‌های فهرست‌شده در حافظه..." else scanMessage.orEmpty(), color = SoftText, fontSize = 11.sp)
                         }
                         scanResult?.let { result ->
                             Spacer(Modifier.height(8.dp))
@@ -198,9 +198,10 @@ private fun MemoraApp() {
                     Triple("تصاویر", Icons.Rounded.Image, result?.let { "${it.images.count} فایل • ${StorageScanner.formatBytes(it.images.bytes)}" } ?: "پس از اسکن"),
                     Triple("ویدئوها", Icons.Rounded.VideoLibrary, result?.let { "${it.videos.count} فایل • ${StorageScanner.formatBytes(it.videos.bytes)}" } ?: "پس از اسکن"),
                     Triple("موسیقی", Icons.Rounded.MusicNote, result?.let { "${it.audio.count} فایل • ${StorageScanner.formatBytes(it.audio.bytes)}" } ?: "پس از اسکن"),
-                    Triple("اسناد", Icons.Rounded.Description, "در مرحله بعد"),
-                    Triple("فایل‌های فشرده", Icons.Rounded.FolderZip, "در مرحله بعد"),
-                    Triple("برنامه‌ها", Icons.Rounded.Android, "در مرحله بعد")
+                    Triple("اسناد", Icons.Rounded.Description, result?.let { "${it.documents.count} فایل • ${StorageScanner.formatBytes(it.documents.bytes)}" } ?: "پس از اسکن"),
+                    Triple("فایل‌های فشرده", Icons.Rounded.FolderZip, result?.let { "${it.archives.count} فایل • ${StorageScanner.formatBytes(it.archives.bytes)}" } ?: "پس از اسکن"),
+                    Triple("نصب‌کننده‌ها", Icons.Rounded.Android, result?.let { "${it.apks.count} فایل • ${StorageScanner.formatBytes(it.apks.bytes)}" } ?: "پس از اسکن"),
+                    Triple("سایر فایل‌ها", Icons.Rounded.InsertDriveFile, result?.let { "${it.other.count} فایل • ${StorageScanner.formatBytes(it.other.bytes)}" } ?: "پس از اسکن")
                 )
                 categories.chunked(2).forEach { pair ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -224,6 +225,37 @@ private fun MemoraApp() {
                     }
                 }
 
+                result?.let { scanned ->
+                    Spacer(Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Panel),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("بزرگ‌ترین فایل‌های پیدا شده", color = White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.height(10.dp))
+                            if (scanned.largestFiles.isEmpty()) {
+                                Text("فایلی در فهرست رسانه‌ای دستگاه پیدا نشد.", color = SoftText, fontSize = 12.sp)
+                            } else {
+                                scanned.largestFiles.take(10).forEachIndexed { index, file ->
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("${index + 1}.", color = Purple, fontSize = 12.sp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(file.name, color = White, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                                        Text(StorageScanner.formatBytes(file.size), color = SoftText, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text("تعداد کل موارد فهرست‌شده: ${scanned.indexedFileCount}", color = SoftText, fontSize = 11.sp)
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(8.dp))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF17152B)),
@@ -235,7 +267,7 @@ private fun MemoraApp() {
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text("پاک‌سازی هوشمند", color = White, fontWeight = FontWeight.Bold)
-                            Text("یافتن فایل‌های حجیم، تکراری و قدیمی", color = SoftText, fontSize = 11.sp)
+                            Text("نمایش فایل‌های بزرگ در گزارش اسکن؛ حذف امن در نسخه بعد", color = SoftText, fontSize = 11.sp)
                         }
                         Spacer(Modifier.weight(1f))
                         Icon(Icons.Rounded.ChevronLeft, null, tint = SoftText)
