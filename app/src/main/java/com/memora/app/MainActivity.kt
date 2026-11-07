@@ -463,7 +463,7 @@ private fun FilesScreen(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onPick, modifier = Modifier.weight(1f)) { Text("انتخاب حافظه") }
+            Button(onClick = onPick, modifier = Modifier.weight(1f), enabled = !busy) { Text("انتخاب حافظه") }
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("بروزرسانی") }
         }
         OutlinedTextField(value = query, onValueChange = onQuery, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("جستجوی نام فایل یا پوشه") })
@@ -477,28 +477,28 @@ private fun FilesScreen(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = { onSelectAll(filtered) }) { Text(if (selected.size == filtered.size && filtered.isNotEmpty()) "لغو انتخاب" else "انتخاب همه") }
-            TextButton(onClick = onCreateFolder) { Text("پوشه جدید") }
+            TextButton(onClick = { onSelectAll(filtered) }, enabled = !busy) { Text(if (selected.size == filtered.size && filtered.isNotEmpty()) "لغو انتخاب" else "انتخاب همه") }
+            TextButton(onClick = onCreateFolder, enabled = !busy) { Text("پوشه جدید") }
         }
         if (selected.isNotEmpty()) {
             Text("انتخاب‌شده: ${selected.size}", color = Purple)
             Row {
-                TextButton(onClick = onMove) { Text("انتقال") }
-                TextButton(onClick = onDeleteSelected) { Text("حذف گروهی", color = Danger) }
+                TextButton(onClick = onMove, enabled = !busy) { Text("انتقال") }
+                TextButton(onClick = onDeleteSelected, enabled = !busy) { Text("حذف گروهی", color = Danger) }
             }
         }
         Text(message, color = SoftText, fontSize = 10.sp)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             filtered.forEach { item ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = item.uri in selected, onCheckedChange = { onToggle(item.uri) })
+                    Checkbox(checked = item.uri in selected, onCheckedChange = { onToggle(item.uri) }, enabled = !busy)
                     Text(if (item.isDirectory) "📁" else "📄", modifier = Modifier.padding(end = 7.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable { onOpen(item) })
+                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable(enabled = !busy) { onOpen(item) })
                         Text(if (item.isDirectory) item.relativePath else "${StorageScanner.formatBytes(item.size)} • ${item.relativePath}", color = SoftText, fontSize = 10.sp, maxLines = 1)
                     }
-                    IconButton(onClick = { onRename(item) }) { Icon(Icons.Rounded.Edit, "تغییر نام", tint = Purple) }
-                    IconButton(onClick = { onDelete(item) }) { Icon(Icons.Rounded.Delete, "حذف", tint = Danger) }
+                    IconButton(onClick = { onRename(item) }, enabled = !busy) { Icon(Icons.Rounded.Edit, "تغییر نام", tint = Purple) }
+                    IconButton(onClick = { onDelete(item) }, enabled = !busy) { Icon(Icons.Rounded.Delete, "حذف", tint = Danger) }
                 }
                 Divider(color = Color(0xFF252C43))
             }
@@ -524,7 +524,7 @@ private fun CleanupScreen(
         Text("پاک‌سازی هوشمند", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("هیچ موردی بدون انتخاب و تأیید تو حذف نمی‌شود.", color = SoftText, fontSize = 11.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onPick, modifier = Modifier.weight(1f)) { Text("انتخاب حافظه") }
+            Button(onClick = onPick, modifier = Modifier.weight(1f), enabled = !busy) { Text("انتخاب حافظه") }
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
         Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
@@ -548,7 +548,7 @@ private fun CleanupScreen(
             duplicateItems.forEach { CleanupItem(it, selection, onToggle) }
         }
         if (selection.isNotEmpty()) {
-            Button(onClick = onDeleteSelected, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onDeleteSelected, enabled = !busy && !duplicateBusy, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
                 Text("حذف ${selection.size} فایل انتخاب‌شده")
             }
         }
@@ -559,7 +559,7 @@ private fun CleanupScreen(
 @Composable
 private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) })
+        Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) }, enabled = !busy && !duplicateBusy)
         Column(Modifier.weight(1f)) {
             Text(item.name, color = White, fontSize = 11.sp, maxLines = 1)
             Text(StorageScanner.formatBytes(item.size), color = SoftText, fontSize = 10.sp)
