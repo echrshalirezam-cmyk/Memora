@@ -519,6 +519,11 @@ private fun CleanupScreen(
     val largeFolders = tree?.largestFolders.orEmpty()
     val empty = tree?.emptyFolders.orEmpty()
     val duplicateItems = duplicateGroups.flatten()
+    val selectedEntries = tree?.entries.orEmpty().filter { it.uri in selection }
+    val selectedTopLevel = selectedEntries.filterNot { entry ->
+        selectedEntries.any { parent -> parent.isDirectory && entry.relativePath.startsWith(parent.relativePath + "/") }
+    }
+    val selectedBytes = selectedTopLevel.sumOf { it.size }
     val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
     val oldFiles = tree?.files.orEmpty().filter { it.modified > 0L && System.currentTimeMillis() - it.modified > 365L * 24L * 60L * 60L * 1000L }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -552,6 +557,7 @@ private fun CleanupScreen(
             duplicateItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
         }
         if (selection.isNotEmpty()) {
+            Text("فضای قابل آزادسازی انتخاب‌شده: ${StorageScanner.formatBytes(selectedBytes)}", color = Purple, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             Button(onClick = onDeleteSelected, enabled = !busy && !duplicateBusy, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
                 Text("حذف ${selection.size} فایل انتخاب‌شده")
             }
