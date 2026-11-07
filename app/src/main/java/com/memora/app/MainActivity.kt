@@ -446,7 +446,7 @@ private fun FilesScreen(
                     Checkbox(checked = item.uri in selected, onCheckedChange = { onToggle(item.uri) })
                     Text(if (item.isDirectory) "📁" else "📄", modifier = Modifier.padding(end = 7.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable { if (!item.isDirectory) onOpen(item) })
+                        Text(item.name, color = White, fontSize = 12.sp, maxLines = 1, modifier = Modifier.clickable { onOpen(item) })
                         Text(if (item.isDirectory) item.relativePath else "${StorageScanner.formatBytes(item.size)} • ${item.relativePath}", color = SoftText, fontSize = 10.sp, maxLines = 1)
                     }
                     IconButton(onClick = { onRename(item) }) { Icon(Icons.Rounded.Edit, "تغییر نام", tint = Purple) }
