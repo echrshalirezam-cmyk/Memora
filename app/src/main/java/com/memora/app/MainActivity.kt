@@ -235,7 +235,8 @@ private fun MemoraApp() {
             }) { dialog = "" }
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
-                    val result = TreeStorageManager.deleteMany(context, selected.toList())
+                    val ordered = selected.sortedByDescending { uri -> tree?.entries?.firstOrNull { it.uri == uri }?.relativePath?.split("/")?.size ?: 0 }
+                    val result = TreeStorageManager.deleteMany(context, ordered)
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     dialog = ""
                     refresh()
@@ -243,7 +244,8 @@ private fun MemoraApp() {
             }) { dialog = "" }
             "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} فایل انتخاب‌شده حذف شود؟", {
                 scope.launch {
-                    val result = TreeStorageManager.deleteMany(context, cleanSelection.toList())
+                    val ordered = cleanSelection.sortedByDescending { uri -> tree?.entries?.firstOrNull { it.uri == uri }?.relativePath?.split("/")?.size ?: 0 }
+                    val result = TreeStorageManager.deleteMany(context, ordered)
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     cleanSelection = emptySet()
                     dialog = ""
@@ -392,6 +394,8 @@ private fun CleanupScreen(
     val large = tree?.largestFiles.orEmpty()
     val empty = tree?.emptyFolders.orEmpty()
     val duplicateItems = duplicateGroups.flatten()
+    val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
+    val oldFiles = tree?.files.orEmpty().filter { it.modified > 0L && System.currentTimeMillis() - it.modified > 365L * 24L * 60L * 60L * 1000L }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("پاک‌سازی هوشمند", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("هیچ موردی بدون انتخاب و تأیید تو حذف نمی‌شود.", color = SoftText, fontSize = 11.sp)
@@ -405,6 +409,12 @@ private fun CleanupScreen(
         Text("پوشه‌های خالی • ${empty.size} مورد پیدا شد", color = White, fontWeight = FontWeight.Bold)
         empty.forEach { folder -> CleanupItem(folder, selection, onToggle) }
         Spacer(Modifier.height(12.dp))
+        Text("فایل‌های موقت و پشتیبان • ${tempFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
+        tempFiles.forEach { CleanupItem(it, selection, onToggle) }
+        Spacer(Modifier.height(10.dp))
+        Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
+        oldFiles.forEach { CleanupItem(it, selection, onToggle) }
+        Spacer(Modifier.height(10.dp))
         Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
         Button(onClick = onFindDuplicates, enabled = tree != null && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
             Text(if (duplicateBusy) "در حال بررسی..." else "بررسی فایل‌های تکراری")
