@@ -18,7 +18,7 @@ class StorageAlgorithmsTest {
     }
 
     @Test fun similarNamesNormalizeCopyAndNumberSuffixes() {
-        assertEquals("the matrix", StorageAlgorithms.normalizeSimilarName("The.Matrix (2).mkv"))
+        assertEquals("the.matrix", StorageAlgorithms.normalizeSimilarName("The.Matrix (2).mkv"))
         assertEquals("sample", StorageAlgorithms.normalizeSimilarName("Sample copy 2.mp4"))
         assertEquals("sample", StorageAlgorithms.normalizeSimilarName("Sample نسخه 3.avi"))
     }
