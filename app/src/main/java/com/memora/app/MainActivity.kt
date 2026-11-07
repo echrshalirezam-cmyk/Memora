@@ -370,7 +370,7 @@ private fun ColumnScope.HomeScreen(
             }.getOrNull()
         }
         primaryStats?.let { stats ->
-            Text("حافظه داخلی دستگاه • کل ${StorageScanner.formatBytes(stats.first)} • آزاد ${StorageScanner.formatBytes(stats.second)}", color = SoftText, fontSize = 10.sp)
+            Text("حافظه داخلی دستگاه • کل ${StorageScanner.formatBytes(stats.first)} • مصرف‌شده ${StorageScanner.formatBytes((stats.first - stats.second).coerceAtLeast(0L))} • آزاد ${StorageScanner.formatBytes(stats.second)}", color = SoftText, fontSize = 10.sp)
         }
         Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(22.dp)) {
