@@ -105,19 +105,61 @@ object TreeStorageManager {
         ManagedTree(root.name ?: "حافظه انتخاب‌شده", sizedEntries, sizedEmpty, bytes)
     }
 
-    suspend fun deleteSelection(context: Context, tree: ManagedTree, uris: List<Uri>): Pair<Int, Int> = withContext(Dispatchers.IO) {
+    suspend fun deleteSelection(
+        context: Context,
+        treeUri: Uri,
+        tree: ManagedTree,
+        uris: List<Uri>
+    ): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, treeUri)
+            ?: return@withContext (0 to uris.size)
         val selected = tree.entries.filter { it.uri in uris }
-        val expanded = selected.toMutableList()
-        selected.filter { it.isDirectory }.forEach { folder ->
-            expanded.addAll(tree.entries.filter { it.relativePath.startsWith(folder.relativePath + "/") })
+        // Delete only selected top-level entries; descendants are removed recursively.
+        val topLevel = selected.filterNot { entry ->
+            selected.any { parent ->
+                parent.isDirectory && parent.uri != entry.uri &&
+                    entry.relativePath.startsWith(parent.relativePath + "/")
+            }
         }
-        val ordered = expanded.distinctBy { it.uri }.sortedByDescending { it.relativePath.split("/").size }
-        var success = 0
+        var deleted = 0
         var failed = 0
-        ordered.forEach { entry ->
-            if (DocumentFile.fromSingleUri(context, entry.uri)?.delete() == true) success++ else failed++
+
+        fun resolve(path: String): DocumentFile? {
+            var current = root
+            for (part in path.split("/").filter { it.isNotBlank() }) {
+                current = current.findFile(part) ?: return null
+            }
+            return current
         }
-        success to failed
+
+        fun removeRecursively(node: DocumentFile): Boolean {
+            var allOk = true
+            if (node.isDirectory) {
+                val children = try { node.listFiles().toList() } catch (_: Exception) {
+                    failed++
+                    return false
+                }
+                children.forEach { child ->
+                    if (removeRecursively(child)) deleted++ else allOk = false
+                }
+            }
+            val removed = try { node.delete() } catch (_: Exception) { false }
+            if (removed) deleted++ else {
+                failed++
+                allOk = false
+            }
+            return allOk
+        }
+
+        topLevel.forEach { entry ->
+            val node = resolve(entry.relativePath)
+            if (node == null) {
+                failed++
+            } else {
+                removeRecursively(node)
+            }
+        }
+        deleted to failed
     }
 
     suspend fun createFolderInPath(context: Context, treeUri: Uri, relativePath: String, name: String): Boolean = withContext(Dispatchers.IO) {
