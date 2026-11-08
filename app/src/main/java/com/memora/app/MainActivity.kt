@@ -358,7 +358,7 @@ private fun MemoraApp() {
                     } else TreeStorageManager.delete(context, item.uri)
                     message = if (ok) "مورد حذف شد" else "حذف انجام نشد؛ فایل یا پوشه دست‌نخورده باقی ماند. مجوز دسترسی را بررسی کن."
                     dialog = ""
-                    if (ok) refresh(fullScan = false)
+                    // Deletion only: the user decides when to rescan.
                 } else dialog = ""
             }) { dialog = "" }
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
@@ -369,7 +369,7 @@ private fun MemoraApp() {
                     dialog = ""
                     if (result.first > 0) {
                         selected = emptySet()
-                        refresh(fullScan = false)
+                        message = "${result.first} مورد حذف شد. می‌توانی موارد دیگری انتخاب کنی؛ اسکن را هر وقت خواستی دستی اجرا کن."
                     } else {
                         message = "هیچ موردی حذف نشد؛ اسکن مجدد اجرا نشد و انتخاب‌ها باقی ماندند."
                     }
@@ -384,10 +384,10 @@ private fun MemoraApp() {
                     } else 0 to selectedUris.size
                     dialog = ""
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
-                    // Keep the user's selection when deletion did not succeed.
+                    // Never rescan automatically after cleanup. The user may select more items.
                     if (result.first > 0) {
                         cleanSelection = emptySet()
-                        refresh(fullScan = false)
+                        message = "${result.first} مورد حذف شد. می‌توانی موارد دیگری انتخاب کنی؛ اسکن دوباره فقط با دکمهٔ دستی انجام می‌شود."
                     } else {
                         message = "هیچ موردی حذف نشد؛ اسکن مجدد اجرا نشد و انتخاب‌ها باقی ماندند. مجوز پوشه را بررسی کن."
                     }
