@@ -219,10 +219,14 @@ object TreeStorageManager {
             return current
         }
 
-        fun deleteUri(uri: Uri): Boolean = try {
-            DocumentsContract.deleteDocument(context.contentResolver, uri)
-        } catch (_: Exception) {
-            try { DocumentFile.fromSingleUri(context, uri)?.delete() == true } catch (_: Exception) { false }
+        fun deleteUri(uri: Uri): Boolean {
+            val direct = try {
+                DocumentsContract.deleteDocument(context.contentResolver, uri)
+            } catch (_: Exception) {
+                false
+            }
+            if (direct) return true
+            return try { DocumentFile.fromSingleUri(context, uri)?.delete() == true } catch (_: Exception) { false }
         }
 
         fun removeRecursively(node: DocumentFile): Boolean {
@@ -233,7 +237,7 @@ object TreeStorageManager {
                     return false
                 }
                 children.forEach { child ->
-                    if (removeRecursively(child)) deleted++ else allOk = false
+                    if (!removeRecursively(child)) allOk = false
                 }
             }
             if (deleteUri(node.uri)) {
