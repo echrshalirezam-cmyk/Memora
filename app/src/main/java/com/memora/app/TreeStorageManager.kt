@@ -44,10 +44,12 @@ object TreeStorageManager {
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: throw IllegalStateException("پوشه انتخاب‌شده در دسترس نیست")
         if (!root.canRead()) throw SecurityException("مجوز خواندن پوشه وجود ندارد")
-        val pending = mutableListOf<Pair<DocumentFile, String>>()
+        val all = mutableListOf<ManagedEntry>()
         val empty = mutableListOf<ManagedEntry>()
+        var visited = 0
+        var bytes = 0L
 
-        suspend fun discover(dir: DocumentFile, path: String) {
+        suspend fun walk(dir: DocumentFile, path: String) {
             pauseCheck()
             currentCoroutineContext().ensureActive()
             val children = dir.listFiles()
@@ -59,27 +61,19 @@ object TreeStorageManager {
                 currentCoroutineContext().ensureActive()
                 val name = child.name ?: "بدون نام"
                 val childPath = if (path.isEmpty()) name else "$path/$name"
-                pending.add(child to childPath)
-                if (child.isDirectory) discover(child, childPath)
-                if (pending.size % 25 == 0) onProgress(pending.size, -1)
+                val folder = child.isDirectory
+                val size = if (folder) 0L else child.length().coerceAtLeast(0L)
+                if (!folder) bytes += size
+                all.add(ManagedEntry(name, size, folder, child.uri, child.type, child.lastModified(), childPath))
+                visited++
+                if (visited % 10 == 0) onProgress(visited, -1)
+                if (folder) walk(child, childPath)
             }
         }
-        discover(root, "")
-        val total = pending.size
-        onProgress(0, total)
-        val all = mutableListOf<ManagedEntry>()
-        var bytes = 0L
-        pending.forEachIndexed { index, pair ->
-            pauseCheck()
-            currentCoroutineContext().ensureActive()
-            val child = pair.first
-            val path = pair.second
-            val folder = child.isDirectory
-            val size = if (folder) 0L else child.length().coerceAtLeast(0L)
-            if (!folder) bytes += size
-            all.add(ManagedEntry(child.name ?: "بدون نام", size, folder, child.uri, child.type, child.lastModified(), path))
-            if ((index + 1) % 10 == 0 || index == total - 1) onProgress(index + 1, total)
-        }
+
+        onProgress(0, -1)
+        walk(root, "")
+        onProgress(visited, -1)
         val folderSizes = StorageAlgorithms.aggregateFolderSizes(
             all.filter { !it.isDirectory }.map { it.relativePath to it.size }
         )
