@@ -40,7 +40,7 @@ class MemoryScanService : Service() {
       notifyScan(label)
      })
     ScanSnapshotStore.save(applicationContext,result)
-    prefs.edit().putBoolean("busy",false).putBoolean("paused",false).putFloat("progress",1f).putString("progressText","اسکن کامل شد").putString("status","completed").putInt("fileCount",result.files.size).apply()
+    prefs.edit().putBoolean("busy",false).putBoolean("paused",false).putFloat("progress",1f).putString("progressText","اسکن کامل شد").putString("status","completed").putLong("finishedAt",System.currentTimeMillis()).putInt("fileCount",result.files.size).apply()
     notifyScan("اسکن کامل شد • "+result.files.size+" فایل")
    } catch(e: CancellationException) {
     prefs.edit().putBoolean("busy",false).putBoolean("paused",false).putString("status","cancelled").apply(); notifyScan("اسکن متوقف شد")
@@ -48,12 +48,12 @@ class MemoryScanService : Service() {
     prefs.edit().putBoolean("busy",false).putBoolean("paused",false).putString("status","error").putString("error",e.localizedMessage ?: "خطای نامشخص").apply(); notifyScan("خطا در اسکن")
    } finally {
     wake?.let { if(it.isHeld) it.release() }; wake=null; job=null
-    if(Build.VERSION.SDK_INT>=24) stopForeground(STOP_FOREGROUND_DETACH) else @Suppress("DEPRECATION") stopForeground(false)
+    leaveForeground()
     stopSelf()
    }
   }
  }
- private fun pending(action:String, code:Int)=PendingIntent.getService(this,code,Intent(this,MemoryScanService::class.java).setAction(action),PendingIntent.FLAG_UPDATE_CURRENT or if(Build.VERSION.SDK_INT>=23) PendingIntent.FLAG_IMMUTABLE else 0)
+ @Suppress("DEPRECATION")\n private fun leaveForeground() { if(Build.VERSION.SDK_INT>=24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(false) }\n private fun pending(action:String, code:Int)=PendingIntent.getService(this,code,Intent(this,MemoryScanService::class.java).setAction(action),PendingIntent.FLAG_UPDATE_CURRENT or if(Build.VERSION.SDK_INT>=23) PendingIntent.FLAG_IMMUTABLE else 0)
  private fun notification(msg:String): Notification {
   val isPaused=paused.value
   return NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_download)
