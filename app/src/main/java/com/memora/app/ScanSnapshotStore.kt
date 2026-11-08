@@ -28,7 +28,8 @@ object ScanSnapshotStore {
   }
  }
 
- fun load(context:Context,expectedTreeUri:Uri?=null):ManagedTree?=try {
+ fun load(context:Context,expectedTreeUri:Uri?=null):ManagedTree? {
+  return try {
   val root=JSONObject(File(context.filesDir,FILE).readText())
   if (expectedTreeUri!=null && root.optString("rootUri")!=expectedTreeUri.toString()) return null
   fun read(a:JSONArray):List<ManagedEntry> = (0 until a.length()).map { n ->
@@ -39,4 +40,4 @@ object ScanSnapshotStore {
   val entries=read(root.getJSONArray("entries"))
   ManagedTree(root.getString("rootName"),entries,read(root.getJSONArray("emptyFolders")),root.getLong("totalBytes"))
  } catch(_:Exception) { null }
-}
+ }
