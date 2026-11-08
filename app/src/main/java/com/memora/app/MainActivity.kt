@@ -284,6 +284,10 @@ private fun MemoraApp() {
                         }
                     },
                     onToggle = { uri -> cleanSelection = if (uri in cleanSelection) cleanSelection - uri else cleanSelection + uri },
+                    onToggleAll = { items ->
+                        val uris = items.map { it.uri }.toSet()
+                        cleanSelection = if (uris.isNotEmpty() && cleanSelection.containsAll(uris)) cleanSelection - uris else cleanSelection + uris
+                    },
                     onDeleteSelected = { dialog = "deleteClean" },
                     onApps = { tab = 3 }
                 )
@@ -548,97 +552,129 @@ private fun FilesScreen(
     }
 }
 
+
 @Composable
 private fun CleanupScreen(
     tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, similarGroups: List<List<ManagedEntry>>, sameNameGroups: List<List<ManagedEntry>>, busy: Boolean,
     duplicateBusy: Boolean, duplicateChecked: Boolean, similarBusy: Boolean, similarChecked: Boolean,
     sameNameBusy: Boolean, sameNameChecked: Boolean, selection: Set<Uri>,
     onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit, onFindSameNames: () -> Unit,
-    onToggle: (Uri) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
+    onToggle: (Uri) -> Unit, onToggleAll: (List<ManagedEntry>) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
     val large = tree?.largestFiles.orEmpty()
     val largeFolders = tree?.largestFolders.orEmpty()
     val empty = tree?.emptyFolders.orEmpty()
     val duplicateItems = duplicateGroups.flatten()
+    val sameNameItems = sameNameGroups.flatten()
+    val similarItems = similarGroups.flatten()
+    val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
+    val oldFiles = tree?.files.orEmpty().filter { it.modified > 0L && System.currentTimeMillis() - it.modified > 365L * 24L * 60L * 60L * 1000L }
+    val sections = listOf("پوشه‌های خالی", "فایل‌های تکراری", "فایل‌های هم‌نام", "نام‌های مشابه", "فایل‌های موقت", "فایل‌های قدیمی", "فایل‌های حجیم", "پوشه‌های حجیم")
+    var activeSection by remember { mutableStateOf("پوشه‌های خالی") }
+    var shownCount by remember(activeSection) { mutableIntStateOf(80) }
+    val items = when (activeSection) {
+        "پوشه‌های خالی" -> empty
+        "فایل‌های تکراری" -> duplicateItems
+        "فایل‌های هم‌نام" -> sameNameItems
+        "نام‌های مشابه" -> similarItems
+        "فایل‌های موقت" -> tempFiles
+        "فایل‌های قدیمی" -> oldFiles
+        "فایل‌های حجیم" -> large
+        else -> largeFolders
+    }
     val selectedEntries = tree?.entries.orEmpty().filter { it.uri in selection }
     val selectedTopLevel = selectedEntries.filterNot { entry ->
         selectedEntries.any { parent -> parent.isDirectory && entry.relativePath.startsWith(parent.relativePath + "/") }
     }
     val selectedBytes = selectedTopLevel.sumOf { it.size }
-    val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
-    val oldFiles = tree?.files.orEmpty().filter { it.modified > 0L && System.currentTimeMillis() - it.modified > 365L * 24L * 60L * 60L * 1000L }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    val allSelected = items.isNotEmpty() && items.all { it.uri in selection }
+    val sectionBusy = busy || duplicateBusy || similarBusy || sameNameBusy
+    Column(Modifier.fillMaxSize()) {
         Text("پاک‌سازی هوشمند", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-        Text("هیچ موردی بدون انتخاب و تأیید تو حذف نمی‌شود.", color = SoftText, fontSize = 11.sp)
+        Text("هر دسته جداگانه نمایش داده می‌شود؛ برای جلوگیری از هنگ، حداکثر ۸۰ مورد در هر مرحله بارگذاری می‌شود.", color = SoftText, fontSize = 11.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onPick, modifier = Modifier.weight(1f), enabled = !busy) { Text("انتخاب حافظه") }
             OutlinedButton(onClick = onRefresh, enabled = tree != null && !busy) { Text("اسکن دوباره") }
         }
-        Text("فایل‌های حجیم • ${large.size} مورد شناسایی‌شده", color = White, fontWeight = FontWeight.Bold)
-        large.forEach { item -> CleanupItem(item, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy) }
-        Spacer(Modifier.height(8.dp))
-        Text("پوشه‌های حجیم", color = White, fontWeight = FontWeight.Bold)
-        largeFolders.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy) }
-        Spacer(Modifier.height(12.dp))
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
-            Column(Modifier.padding(12.dp)) {
-                Text("پوشه‌های خالی • ${empty.size} مورد", color = White, fontWeight = FontWeight.Bold)
-                Text("فقط پوشه‌هایی که هنگام اسکن هیچ محتوایی نداشته‌اند.", color = SoftText, fontSize = 10.sp)
-                if (empty.isEmpty()) Text("موردی پیدا نشده است.", color = SoftText, fontSize = 11.sp)
-                empty.forEach { folder -> CleanupItem(folder, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy && !sameNameBusy) }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text("فایل‌های موقت و پشتیبان • ${tempFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
-        tempFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
-        Spacer(Modifier.height(10.dp))
-        Text("فایل‌های قدیمی‌تر از یک سال • ${oldFiles.size} مورد", color = White, fontWeight = FontWeight.Bold)
-        oldFiles.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
-        Spacer(Modifier.height(10.dp))
-        Spacer(Modifier.height(10.dp))
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
-            Column(Modifier.padding(12.dp)) {
-                Text("فایل‌های هم‌نام", color = White, fontWeight = FontWeight.Bold)
-                Text("نام کامل و پسوند یکسان؛ حتی اگر فایل‌ها در پوشه‌های متفاوت باشند.", color = SoftText, fontSize = 10.sp)
-                Button(onClick = onFindSameNames, enabled = tree != null && !busy && !sameNameBusy && !duplicateBusy && !similarBusy, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (sameNameBusy) "در حال بررسی..." else "بررسی فایل‌های هم‌نام")
+        Text("دسته‌بندی پاک‌سازی", color = White, fontWeight = FontWeight.Bold)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            sections.chunked(2).forEach { pair ->
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.fillMaxWidth()) {
+                    pair.forEach { section ->
+                        val count = when (section) {
+                            "پوشه‌های خالی" -> empty.size
+                            "فایل‌های تکراری" -> if (duplicateChecked) duplicateItems.size else null
+                            "فایل‌های هم‌نام" -> if (sameNameChecked) sameNameItems.size else null
+                            "نام‌های مشابه" -> if (similarChecked) similarItems.size else null
+                            "فایل‌های موقت" -> tempFiles.size
+                            "فایل‌های قدیمی" -> oldFiles.size
+                            "فایل‌های حجیم" -> large.size
+                            else -> largeFolders.size
+                        }
+                        Card(
+                            Modifier.weight(1f).padding(vertical = 3.dp).clickable { activeSection = section },
+                            colors = CardDefaults.cardColors(containerColor = if (activeSection == section) Color(0xFF302451) else Panel),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(section, color = White, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                                Text(count?.toString() ?: "—", color = Purple, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
-                if (sameNameChecked) {
-                    val sameItems = sameNameGroups.flatten()
-                    Text("${sameNameGroups.size} گروه • ${sameItems.size} فایل", color = SoftText, fontSize = 11.sp)
-                    if (sameNameGroups.isEmpty()) Text("فایل هم‌نامی پیدا نشد.", color = SoftText, fontSize = 11.sp)
-                    sameNameGroups.forEachIndexed { index, group ->
-                        Text("گروه ${index + 1} • ${group.first().name}", color = Purple, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                        group.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !sameNameBusy && !duplicateBusy && !similarBusy) }
+            }
+            Spacer(Modifier.height(8.dp))
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(activeSection, color = White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Checkbox(checked = allSelected, onCheckedChange = { onToggleAll(items) }, enabled = items.isNotEmpty() && !sectionBusy)
+                        Text("انتخاب همه", color = SoftText, fontSize = 10.sp)
+                    }
+                    when (activeSection) {
+                        "فایل‌های تکراری" -> {
+                            Text("تطبیق محتوای واقعی با SHA-256", color = SoftText, fontSize = 10.sp)
+                            OutlinedButton(onClick = onFindDuplicates, enabled = tree != null && !sectionBusy, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (duplicateBusy) "در حال بررسی..." else if (duplicateChecked) "بررسی دوباره تکراری‌ها" else "شروع بررسی تکراری‌ها")
+                            }
+                        }
+                        "فایل‌های هم‌نام" -> OutlinedButton(onClick = onFindSameNames, enabled = tree != null && !sectionBusy, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (sameNameBusy) "در حال بررسی..." else "بررسی فایل‌های هم‌نام")
+                        }
+                        "نام‌های مشابه" -> {
+                            OutlinedButton(onClick = onFindSimilar, enabled = tree != null && !sectionBusy, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (similarBusy) "در حال بررسی..." else "بررسی نام‌های مشابه")
+                            }
+                            Text("نام‌های مشابه لزوماً فایل تکراری نیستند؛ قبل از حذف بررسی کن.", color = SoftText, fontSize = 10.sp)
+                        }
+                        "پوشه‌های خالی" -> Text("فقط پوشه‌هایی که هنگام اسکن خالی تشخیص داده شده‌اند.", color = SoftText, fontSize = 10.sp)
+                        "فایل‌های موقت" -> Text("پسوندهای موقت، گزارش، کش و پشتیبان؛ قبل از حذف بررسی کن.", color = SoftText, fontSize = 10.sp)
+                        "فایل‌های قدیمی" -> Text("فایل‌هایی که بیش از یک سال از آخرین تغییرشان گذشته است.", color = SoftText, fontSize = 10.sp)
+                        else -> Text("موارد بر اساس حجم مرتب شده‌اند.", color = SoftText, fontSize = 10.sp)
+                    }
+                    Text("${items.size} مورد", color = Purple, fontSize = 11.sp)
+                    if (items.isEmpty()) {
+                        Text(if (tree == null) "ابتدا حافظه را اسکن کن." else "موردی پیدا نشد یا هنوز بررسی این بخش اجرا نشده است.", color = SoftText, fontSize = 11.sp)
+                    } else {
+                        items.take(shownCount).forEach { CleanupItem(it, selection, onToggle, enabled = !sectionBusy) }
+                        if (items.size > shownCount) {
+                            OutlinedButton(onClick = { shownCount += 80 }, modifier = Modifier.fillMaxWidth()) {
+                                Text("نمایش ${minOf(80, items.size - shownCount)} مورد بعدی")
+                            }
+                        }
                     }
                 }
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        Text("نسخه‌های احتمالی با نام مشابه", color = White, fontWeight = FontWeight.Bold)
-        Button(onClick = onFindSimilar, enabled = tree != null && !busy && !similarBusy && !duplicateBusy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (similarBusy) "در حال بررسی نام‌ها..." else "بررسی فایل‌های هم‌نام")
-        }
-        if (similarChecked) {
-            val similarItems = similarGroups.flatten()
-            Text("${similarGroups.size} گروه نام مشابه • ${similarItems.size} فایل (نیازمند بررسی دستی)", color = SoftText, fontSize = 11.sp)
-            similarItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy && !similarBusy) }
-        }
-        Text("فایل‌های تکراری واقعی (بر اساس SHA-256)", color = White, fontWeight = FontWeight.Bold)
-        Button(onClick = onFindDuplicates, enabled = tree != null && !busy && !duplicateBusy && !similarBusy, modifier = Modifier.fillMaxWidth()) {
-            Text(if (duplicateBusy) "در حال بررسی..." else "بررسی فایل‌های تکراری")
-        }
-        if (duplicateChecked) {
-            Text("${duplicateGroups.size} گروه تکراری • ${duplicateItems.size} فایل", color = SoftText, fontSize = 11.sp)
-            duplicateItems.forEach { CleanupItem(it, selection, onToggle, enabled = !busy && !duplicateBusy) }
-        }
-        if (selection.isNotEmpty()) {
-            Text("فضای قابل آزادسازی انتخاب‌شده: ${StorageScanner.formatBytes(selectedBytes)}", color = Purple, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            Button(onClick = onDeleteSelected, enabled = !busy && !duplicateBusy, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
-                Text("حذف ${selection.size} فایل انتخاب‌شده")
+            if (selection.isNotEmpty()) {
+                Text("انتخاب‌شده: ${selection.size} مورد • فضای قابل آزادسازی: ${StorageScanner.formatBytes(selectedBytes)}", color = Purple, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Button(onClick = onDeleteSelected, enabled = !sectionBusy, colors = ButtonDefaults.buttonColors(containerColor = Danger), modifier = Modifier.fillMaxWidth()) {
+                    Text("حذف ${selection.size} مورد انتخاب‌شده")
+                }
             }
+            ActionCard("کش و داده برنامه‌ها", "حذف مستقیم داده برنامه‌های دیگر محدودیت اندروید دارد.", onApps)
         }
-        ActionCard("کش و داده برنامه‌ها", "اندروید اجازه حذف مستقیم داده برنامه‌های دیگر را به این اپ نمی‌دهد.", onApps)
     }
 }
 
