@@ -53,7 +53,9 @@ class MemoryScanService : Service() {
    }
   }
  }
- @Suppress("DEPRECATION")\n private fun leaveForeground() { if(Build.VERSION.SDK_INT>=24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(false) }\n private fun pending(action:String, code:Int)=PendingIntent.getService(this,code,Intent(this,MemoryScanService::class.java).setAction(action),(PendingIntent.FLAG_UPDATE_CURRENT or (if(Build.VERSION.SDK_INT>=23) PendingIntent.FLAG_IMMUTABLE else 0)))
+ @Suppress("DEPRECATION")
+ private fun leaveForeground() { if(Build.VERSION.SDK_INT>=24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(false) }
+ private fun pending(action:String, code:Int)=PendingIntent.getService(this,code,Intent(this,MemoryScanService::class.java).setAction(action),(PendingIntent.FLAG_UPDATE_CURRENT or (if(Build.VERSION.SDK_INT>=23) PendingIntent.FLAG_IMMUTABLE else 0)))
  private fun notification(msg:String): Notification {
   val isPaused=paused.value
   return NotificationCompat.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.stat_sys_download)
