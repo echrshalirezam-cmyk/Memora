@@ -46,19 +46,101 @@ object TreeStorageManager {
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: throw IllegalStateException("پوشه انتخاب‌شده در دسترس نیست")
         if (!root.canRead()) throw SecurityException("مجوز خواندن پوشه وجود ندارد")
+
+        data class ChildRecord(
+            val id: String,
+            val name: String,
+            val mime: String?,
+            val modified: Long,
+            val size: Long
+        )
+
+        fun queryChildren(parentId: String): List<ChildRecord>? = try {
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                    DocumentsContract.Document.COLUMN_SIZE
+                ),
+                null, null, null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+                val modifiedCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                val sizeCol = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE)
+                if (idCol < 0 || nameCol < 0 || mimeCol < 0) {
+                    throw IllegalStateException("ارائه‌دهنده حافظه اطلاعات استاندارد فایل‌ها را برنگرداند")
+                }
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val id = cursor.getString(idCol) ?: continue
+                        add(
+                            ChildRecord(
+                                id = id,
+                                name = cursor.getString(nameCol) ?: "بدون نام",
+                                mime = if (cursor.isNull(mimeCol)) null else cursor.getString(mimeCol),
+                                modified = if (modifiedCol >= 0 && !cursor.isNull(modifiedCol)) cursor.getLong(modifiedCol) else 0L,
+                                size = if (sizeCol >= 0 && !cursor.isNull(sizeCol)) cursor.getLong(sizeCol).coerceAtLeast(0L) else 0L
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+
         val all = mutableListOf<ManagedEntry>()
         val empty = mutableListOf<ManagedEntry>()
         var visited = 0
         var bytes = 0L
-        var reusedFiles = 0
         val previousByPath = if (forceFull) emptyMap() else previousTree?.entries.orEmpty()
             .filter { !it.isDirectory }.associateBy { it.relativePath }
 
-        suspend fun walk(dir: DocumentFile, path: String) {
+        suspend fun publishProgress() {
+            onProgress(visited, -1)
+        }
+
+        suspend fun walkFast(parentId: String, path: String) {
             pauseCheck()
             currentCoroutineContext().ensureActive()
-            // Publish activity before querying SAF; some SD-card providers take time here.
-            onProgress(visited, -1)
+            val children = queryChildren(parentId)
+                ?: throw UnsupportedOperationException("SAF query unavailable")
+            if (children.isEmpty() && path.isNotEmpty()) {
+                val folderUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentId)
+                empty.add(ManagedEntry(path.substringAfterLast('/'), 0L, true, folderUri, null, 0L, path))
+            }
+            for (child in children) {
+                pauseCheck()
+                currentCoroutineContext().ensureActive()
+                val childPath = if (path.isEmpty()) child.name else "$path/${child.name}"
+                val folder = child.mime == DocumentsContract.Document.MIME_TYPE_DIR
+                val previous = if (folder) null else previousByPath[childPath]
+                val unchanged = previous != null && child.modified > 0L && previous.modified == child.modified
+                val size = when {
+                    folder -> 0L
+                    unchanged -> previous!!.size
+                    child.size > 0L -> child.size
+                    else -> 0L
+                }
+                val mime = if (unchanged) previous!!.mimeType else child.mime
+                val childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, child.id)
+                if (!folder) bytes += size
+                all.add(ManagedEntry(child.name, size, folder, childUri, mime, child.modified, childPath))
+                visited++
+                if (visited % 32 == 0) publishProgress()
+                if (folder) walkFast(child.id, childPath)
+            }
+        }
+
+        suspend fun walkFallback(dir: DocumentFile, path: String) {
+            pauseCheck()
+            currentCoroutineContext().ensureActive()
             val children = dir.listFiles()
             if (children.isEmpty() && dir.uri != root.uri) {
                 empty.add(ManagedEntry(dir.name ?: "بدون نام", 0L, true, dir.uri, null, dir.lastModified(), path))
@@ -71,8 +153,6 @@ object TreeStorageManager {
                 val folder = child.isDirectory
                 val modified = child.lastModified()
                 val previous = if (!folder) previousByPath[childPath] else null
-                // SAF still enumerates folders to detect additions/removals, but unchanged files
-                // reuse cached metadata when the provider supplies a stable modification time.
                 val unchanged = previous != null && modified > 0L && previous.modified == modified
                 val size = when {
                     folder -> 0L
@@ -80,21 +160,29 @@ object TreeStorageManager {
                     else -> child.length().coerceAtLeast(0L)
                 }
                 val mime = if (unchanged) previous!!.mimeType else child.type
-                if (unchanged) reusedFiles++
                 if (!folder) bytes += size
                 all.add(ManagedEntry(name, size, folder, child.uri, mime, modified, childPath))
                 visited++
-                // Update for every entry so the UI never appears frozen at zero.
-                onProgress(visited, -1)
-                if (folder) walk(child, childPath)
+                if (visited % 32 == 0) publishProgress()
+                if (folder) walkFallback(child, childPath)
             }
         }
 
         onProgress(0, -1)
-        walk(root, "")
+        val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+        try {
+            walkFast(rootId, "")
+        } catch (_: UnsupportedOperationException) {
+            all.clear()
+            empty.clear()
+            visited = 0
+            bytes = 0L
+            walkFallback(root, "")
+        }
         onProgress(visited, -1)
+
         val folderSizes = StorageAlgorithms.aggregateFolderSizes(
-            all.filter { !it.isDirectory }.map { it.relativePath to it.size }
+            all.asSequence().filter { !it.isDirectory }.map { it.relativePath to it.size }.toList()
         )
         val sizedEntries = all.map { entry ->
             if (entry.isDirectory) entry.copy(size = folderSizes[entry.relativePath] ?: 0L) else entry
@@ -114,7 +202,6 @@ object TreeStorageManager {
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: return@withContext (0 to uris.size)
         val selected = tree.entries.filter { it.uri in uris }
-        // Delete only selected top-level entries; descendants are removed recursively.
         val topLevel = selected.filterNot { entry ->
             selected.any { parent ->
                 parent.isDirectory && parent.uri != entry.uri &&
@@ -132,6 +219,12 @@ object TreeStorageManager {
             return current
         }
 
+        fun deleteUri(uri: Uri): Boolean = try {
+            DocumentsContract.deleteDocument(context.contentResolver, uri)
+        } catch (_: Exception) {
+            try { DocumentFile.fromSingleUri(context, uri)?.delete() == true } catch (_: Exception) { false }
+        }
+
         fun removeRecursively(node: DocumentFile): Boolean {
             var allOk = true
             if (node.isDirectory) {
@@ -143,8 +236,9 @@ object TreeStorageManager {
                     if (removeRecursively(child)) deleted++ else allOk = false
                 }
             }
-            val removed = try { node.delete() } catch (_: Exception) { false }
-            if (removed) deleted++ else {
+            if (deleteUri(node.uri)) {
+                deleted++
+            } else {
                 failed++
                 allOk = false
             }
@@ -153,11 +247,7 @@ object TreeStorageManager {
 
         topLevel.forEach { entry ->
             val node = resolve(entry.relativePath)
-            if (node == null) {
-                failed++
-            } else {
-                removeRecursively(node)
-            }
+            if (node == null) failed++ else removeRecursively(node)
         }
         deleted to failed
     }
