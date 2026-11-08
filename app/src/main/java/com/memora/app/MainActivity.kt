@@ -288,6 +288,16 @@ private fun MemoraApp() {
                         val uris = items.map { it.uri }.toSet()
                         cleanSelection = if (uris.isNotEmpty() && cleanSelection.containsAll(uris)) cleanSelection - uris else cleanSelection + uris
                     },
+                    onOpen = { item ->
+                        try {
+                            val viewIntent = Intent(Intent.ACTION_VIEW)
+                                .setDataAndType(item.uri, item.mimeType ?: "*/*")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            context.startActivity(Intent.createChooser(viewIntent, "باز کردن فایل"))
+                        } catch (_: Exception) {
+                            message = "برنامه‌ای برای باز کردن این فایل پیدا نشد."
+                        }
+                    },
                     onDeleteSelected = { dialog = "deleteClean" },
                     onApps = { tab = 3 }
                 )
@@ -559,7 +569,7 @@ private fun CleanupScreen(
     duplicateBusy: Boolean, duplicateChecked: Boolean, similarBusy: Boolean, similarChecked: Boolean,
     sameNameBusy: Boolean, sameNameChecked: Boolean, selection: Set<Uri>,
     onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit, onFindSameNames: () -> Unit,
-    onToggle: (Uri) -> Unit, onToggleAll: (List<ManagedEntry>) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
+    onToggle: (Uri) -> Unit, onToggleAll: (List<ManagedEntry>) -> Unit, onOpen: (ManagedEntry) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
     val large = tree?.largestFiles.orEmpty()
     val largeFolders = tree?.largestFolders.orEmpty()
@@ -658,7 +668,7 @@ private fun CleanupScreen(
                     if (items.isEmpty()) {
                         Text(if (tree == null) "ابتدا حافظه را اسکن کن." else "موردی پیدا نشد یا هنوز بررسی این بخش اجرا نشده است.", color = SoftText, fontSize = 11.sp)
                     } else {
-                        items.take(shownCount).forEach { CleanupItem(it, selection, onToggle, enabled = !sectionBusy) }
+                        items.take(shownCount).forEach { CleanupItem(it, selection, onToggle, onOpen, enabled = !sectionBusy) }
                         if (items.size > shownCount) {
                             OutlinedButton(onClick = { shownCount += 80 }, modifier = Modifier.fillMaxWidth()) {
                                 Text("نمایش ${minOf(80, items.size - shownCount)} مورد بعدی")
@@ -679,13 +689,14 @@ private fun CleanupScreen(
 }
 
 @Composable
-private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit, enabled: Boolean = true) {
+private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri) -> Unit, onOpen: (ManagedEntry) -> Unit, enabled: Boolean = true) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = item.uri in selection, onCheckedChange = { onToggle(item.uri) }, enabled = enabled)
         Column(Modifier.weight(1f)) {
             Text(item.name, color = White, fontSize = 11.sp, maxLines = 1)
-            Text(StorageScanner.formatBytes(item.size), color = SoftText, fontSize = 10.sp)
+            Text(if (item.isDirectory) "پوشه" else StorageScanner.formatBytes(item.size), color = SoftText, fontSize = 10.sp)
         }
+        if (!item.isDirectory) TextButton(onClick = { onOpen(item) }, enabled = enabled) { Text("بازکردن", color = Purple, fontSize = 11.sp) }
     }
 }
 
