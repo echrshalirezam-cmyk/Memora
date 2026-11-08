@@ -26,7 +26,7 @@ class MemoryScanService : Service() {
  }
  private fun startScan(uri: Uri) {
   startForeground(NOTIFY_ID, notification("آماده‌سازی اسکن"))
-  prefs.edit().putBoolean("busy",true).putBoolean("paused",false).putFloat("progress",0f).putString("progressText","آماده‌سازی اسکن...").putString("status","running").apply()
+  prefs.edit().putBoolean("busy",true).putBoolean("paused",false).putFloat("progress",0f).putInt("scannedCount",0).putLong("lastHeartbeat",System.currentTimeMillis()).putString("progressText","آماده‌سازی اسکن...").putString("status","running").apply()
   paused.value=false
   wake=(getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, packageName+":MemoryScan").apply { setReferenceCounted(false); acquire(6*60*60*1000L) }
   job=scope.launch {
@@ -36,7 +36,7 @@ class MemoryScanService : Service() {
      onProgress={ done,total ->
       val pct=if(total>0) done.toFloat()/total else 0f
       val label=if(total>0) "بررسی "+done+" از "+total+" مورد • "+(pct*100).toInt()+"٪" else "پیمایش پوشه‌ها • "+done+" مورد"
-      prefs.edit().putFloat("progress",pct).putString("progressText",label).apply()
+      prefs.edit().putFloat("progress",pct).putInt("scannedCount",done).putLong("lastHeartbeat",System.currentTimeMillis()).putString("progressText",label).apply()
       notifyScan(label)
      })
     ScanSnapshotStore.save(applicationContext,result)
