@@ -41,3 +41,4 @@ object ScanSnapshotStore {
   ManagedTree(root.getString("rootName"),entries,read(root.getJSONArray("emptyFolders")),root.getLong("totalBytes"))
  } catch(_:Exception) { null }
  }
+}
