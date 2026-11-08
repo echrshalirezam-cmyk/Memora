@@ -364,7 +364,7 @@ private fun MemoraApp() {
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
                     val currentTree = tree
-                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, currentTree, selected.toList()) else 0 to selected.size
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, selected.toList()) else 0 to selected.size
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     dialog = ""
                     refresh()
@@ -373,7 +373,7 @@ private fun MemoraApp() {
             "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} مورد انتخاب‌شده (شامل محتویات پوشه‌های انتخابی) حذف شود؟", {
                 scope.launch {
                     val currentTree = tree
-                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, currentTree, cleanSelection.toList()) else 0 to cleanSelection.size
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, cleanSelection.toList()) else 0 to cleanSelection.size
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     cleanSelection = emptySet()
                     dialog = ""
