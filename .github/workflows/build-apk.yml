@@ -11,8 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      HAS_RELEASE_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,34 +29,10 @@ jobs:
       - name: Run JVM unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
 
-      - name: Prepare persistent signing key
-        if: env.HAS_RELEASE_SIGNING == 'true'
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/memora-release.jks"
-
-      - name: Build signed release APK
-        if: env.HAS_RELEASE_SIGNING == 'true'
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/memora-release.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle --no-daemon :app:assembleRelease -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=1.0.${{ github.run_number }}
-
-      - name: Build debug APK (until release signing is configured)
-        if: env.HAS_RELEASE_SIGNING != 'true'
+      - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=1.0.${{ github.run_number }}
 
-      - name: Upload signed release APK
-        if: env.HAS_RELEASE_SIGNING == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: MEMORA-release
-          path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
-
-      - name: Upload debug APK
-        if: env.HAS_RELEASE_SIGNING != 'true'
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MEMORA-debug
