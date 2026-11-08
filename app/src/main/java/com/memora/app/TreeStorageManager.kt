@@ -39,7 +39,9 @@ object TreeStorageManager {
         context: Context,
         treeUri: Uri,
         pauseCheck: suspend () -> Unit = {},
-        onProgress: suspend (Int, Int) -> Unit = { _, _ -> }
+        onProgress: suspend (Int, Int) -> Unit = { _, _ -> },
+        previousTree: ManagedTree? = null,
+        forceFull: Boolean = false
     ): ManagedTree = withContext(Dispatchers.IO) {
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: throw IllegalStateException("پوشه انتخاب‌شده در دسترس نیست")
@@ -48,6 +50,9 @@ object TreeStorageManager {
         val empty = mutableListOf<ManagedEntry>()
         var visited = 0
         var bytes = 0L
+        var reusedFiles = 0
+        val previousByPath = if (forceFull) emptyMap() else previousTree?.entries.orEmpty()
+            .filter { !it.isDirectory }.associateBy { it.relativePath }
 
         suspend fun walk(dir: DocumentFile, path: String) {
             pauseCheck()
@@ -64,9 +69,20 @@ object TreeStorageManager {
                 val name = child.name ?: "بدون نام"
                 val childPath = if (path.isEmpty()) name else "$path/$name"
                 val folder = child.isDirectory
-                val size = if (folder) 0L else child.length().coerceAtLeast(0L)
+                val modified = child.lastModified()
+                val previous = if (!folder) previousByPath[childPath] else null
+                // SAF still enumerates folders to detect additions/removals, but unchanged files
+                // reuse cached metadata when the provider supplies a stable modification time.
+                val unchanged = previous != null && modified > 0L && previous.modified == modified
+                val size = when {
+                    folder -> 0L
+                    unchanged -> previous!!.size
+                    else -> child.length().coerceAtLeast(0L)
+                }
+                val mime = if (unchanged) previous!!.mimeType else child.type
+                if (unchanged) reusedFiles++
                 if (!folder) bytes += size
-                all.add(ManagedEntry(name, size, folder, child.uri, child.type, child.lastModified(), childPath))
+                all.add(ManagedEntry(name, size, folder, child.uri, mime, modified, childPath))
                 visited++
                 // Update for every entry so the UI never appears frozen at zero.
                 onProgress(visited, -1)
