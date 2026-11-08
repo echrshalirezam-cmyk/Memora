@@ -20,26 +20,31 @@ class MemoryScanService : Service() {
    ACTION_PAUSE -> { paused.value=true; prefs.edit().putBoolean("paused",true).apply(); notifyScan("اسکن مکث شده است") }
    ACTION_RESUME -> { paused.value=false; prefs.edit().putBoolean("paused",false).apply(); notifyScan("اسکن ادامه دارد") }
    ACTION_CANCEL -> { job?.cancel(); stopSelf() }
-   ACTION_START -> if(job?.isActive != true) i.getStringExtra(EXTRA_URI)?.let { startScan(Uri.parse(it)) }
+   ACTION_START -> if(job?.isActive != true) i.getStringExtra(EXTRA_URI)?.let {
+    startScan(Uri.parse(it), i.getBooleanExtra(EXTRA_FULL_SCAN, false))
+   }
   }
   return START_NOT_STICKY
  }
- private fun startScan(uri: Uri) {
+ private fun startScan(uri: Uri, fullScan: Boolean) {
   startForeground(NOTIFY_ID, notification("آماده‌سازی اسکن"))
   prefs.edit().putBoolean("busy",true).putBoolean("paused",false).putFloat("progress",0f).putInt("scannedCount",0).putLong("lastHeartbeat",System.currentTimeMillis()).putString("progressText","آماده‌سازی اسکن...").putString("status","running").apply()
   paused.value=false
   wake=(getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, packageName+":MemoryScan").apply { setReferenceCounted(false); acquire(6*60*60*1000L) }
   job=scope.launch {
    try {
+    val previous=if(fullScan) null else ScanSnapshotStore.load(applicationContext,uri)
     val result=TreeStorageManager.scan(applicationContext,uri,
      pauseCheck={ paused.first { p -> !p } },
+     previousTree=previous,
+     forceFull=fullScan,
      onProgress={ done,total ->
       val pct=if(total>0) done.toFloat()/total else 0f
       val label=if(total>0) "بررسی "+done+" از "+total+" مورد • "+(pct*100).toInt()+"٪" else "پیمایش پوشه‌ها • "+done+" مورد"
       prefs.edit().putFloat("progress",pct).putInt("scannedCount",done).putLong("lastHeartbeat",System.currentTimeMillis()).putString("progressText",label).apply()
       notifyScan(label)
      })
-    ScanSnapshotStore.save(applicationContext,result)
+    ScanSnapshotStore.save(applicationContext,result,uri)
     prefs.edit().putBoolean("busy",false).putBoolean("paused",false).putFloat("progress",1f).putString("progressText","اسکن کامل شد").putString("status","completed").putLong("finishedAt",System.currentTimeMillis()).putInt("fileCount",result.files.size).apply()
     notifyScan("اسکن کامل شد • "+result.files.size+" فایل")
    } catch(e: CancellationException) {
@@ -69,9 +74,11 @@ class MemoryScanService : Service() {
  companion object {
   const val PREFS="memora_scan"; const val CHANNEL="memora_scan_channel"; const val NOTIFY_ID=731
   const val ACTION_START="com.memora.app.scan.START"; const val ACTION_PAUSE="com.memora.app.scan.PAUSE"
-  const val ACTION_RESUME="com.memora.app.scan.RESUME"; const val ACTION_CANCEL="com.memora.app.scan.CANCEL"; const val EXTRA_URI="tree_uri"
-  fun command(context:Context,action:String,uri:Uri?=null) {
-   val i=Intent(context,MemoryScanService::class.java).setAction(action); if(uri!=null)i.putExtra(EXTRA_URI,uri.toString())
+  const val ACTION_RESUME="com.memora.app.scan.RESUME"; const val ACTION_CANCEL="com.memora.app.scan.CANCEL"; const val EXTRA_URI="tree_uri"; const val EXTRA_FULL_SCAN="full_scan"
+  fun command(context:Context,action:String,uri:Uri?=null,fullScan:Boolean=false) {
+   val i=Intent(context,MemoryScanService::class.java).setAction(action)
+   if(uri!=null)i.putExtra(EXTRA_URI,uri.toString())
+   if(action==ACTION_START)i.putExtra(EXTRA_FULL_SCAN,fullScan)
    if(Build.VERSION.SDK_INT>=26 && action==ACTION_START) context.startForegroundService(i) else context.startService(i)
   }
  }
