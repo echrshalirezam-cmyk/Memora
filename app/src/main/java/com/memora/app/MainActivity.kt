@@ -65,6 +65,7 @@ private fun MemoraApp() {
     var scanProgress by remember { mutableFloatStateOf(0f) }
     var scanProgressText by remember { mutableStateOf("") }
     var scanPaused by remember { mutableStateOf(false) }
+    var loadedScanAt by remember { mutableLongStateOf(0L) }
 
     var message by remember { mutableStateOf("برای شروع، حافظه داخلی یا کارت حافظه را انتخاب کن.") }
     var filter by remember { mutableStateOf("همه") }
@@ -131,14 +132,18 @@ private fun MemoraApp() {
             scanProgress = scanPrefs.getFloat("progress", 0f)
             scanProgressText = scanPrefs.getString("progressText", scanProgressText) ?: scanProgressText
             if (status == "completed") {
-                val restored = withContext(Dispatchers.IO) { ScanSnapshotStore.load(context) }
-                if (restored != null && tree?.entries?.size != restored.entries.size) {
+                val finishedAt = scanPrefs.getLong("finishedAt", 0L)
+                if (finishedAt > loadedScanAt) {
+                    val restored = withContext(Dispatchers.IO) { ScanSnapshotStore.load(context) }
+                    if (restored != null) {
                     tree = restored
+                    loadedScanAt = finishedAt
                     duplicateGroups = emptyList(); duplicateChecked = false
                     similarGroups = emptyList(); similarChecked = false
                     sameNameGroups = emptyList(); sameNameChecked = false
                     cleanSelection = emptySet(); selected = emptySet()
                     message = "اسکن کامل شد • ${restored.files.size} فایل"
+                    }
                 }
             } else if (status == "error") {
                 message = "خطا در اسکن: ${scanPrefs.getString("error", "دسترسی ممکن نیست")}"
