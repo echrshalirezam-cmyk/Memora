@@ -65,8 +65,7 @@ private fun MemoraApp() {
     var scanProgress by remember { mutableFloatStateOf(0f) }
     var scanProgressText by remember { mutableStateOf("") }
     var scanPaused by remember { mutableStateOf(false) }
-    val pauseFlow = remember { MutableStateFlow(false) }
-    var scanJob by remember { mutableStateOf<Job?>(null) }
+
     var message by remember { mutableStateOf("برای شروع، حافظه داخلی یا کارت حافظه را انتخاب کن.") }
     var filter by remember { mutableStateOf("همه") }
     var currentFolderPath by remember { mutableStateOf("") }
@@ -90,50 +89,19 @@ private fun MemoraApp() {
     var duplicateChecked by remember { mutableStateOf(false) }
     var cleanSelection by remember { mutableStateOf(setOf<Uri>()) }
 
-    fun refresh() {
-        val uri = treeUri ?: return
+    fun refresh(requestedUri: Uri? = treeUri) {
+        val uri = requestedUri ?: return
         if (busy) return
         busy = true
         scanPaused = false
-        pauseFlow.value = false
         scanProgress = 0f
-        scanProgressText = "آماده‌سازی اسکن..."
-        scanJob = scope.launch {
-            try {
-                tree = TreeStorageManager.scan(
-                    context,
-                    uri,
-                    pauseCheck = { pauseFlow.first { paused -> !paused } },
-                    onProgress = { done, total ->
-                        withContext(Dispatchers.Main) {
-                            if (total <= 0) {
-                                scanProgressText = "در حال پیمایش پوشه‌ها • $done مورد"
-                            } else {
-                                scanProgress = if (total == 0) 1f else done.toFloat() / total.toFloat()
-                                scanProgressText = "بررسی فایل‌ها و پوشه‌ها: $done از $total • ${(scanProgress * 100).toInt()}٪"
-                            }
-                        }
-                    }
-                )
-                duplicateGroups = emptyList()
-                duplicateChecked = false
-                similarGroups = emptyList()
-                similarChecked = false
-                sameNameGroups = emptyList()
-                sameNameChecked = false
-                cleanSelection = emptySet()
-                message = "اسکن کامل شد • ${tree?.files?.size ?: 0} فایل"
-                selected = emptySet()
-            } catch (e: CancellationException) {
-                message = "اسکن به درخواست کاربر متوقف شد."
-            } catch (e: Exception) {
-                message = "خطا در اسکن: ${e.localizedMessage ?: "دسترسی ممکن نیست"}"
-            } finally {
-                busy = false
-                scanPaused = false
-                pauseFlow.value = false
-                scanJob = null
-            }
+        scanProgressText = "آماده‌سازی اسکن در پس‌زمینه..."
+        message = "اسکن حتی با خاموش‌شدن صفحه ادامه پیدا می‌کند."
+        try {
+            MemoryScanService.command(context, MemoryScanService.ACTION_START, uri)
+        } catch (e: Exception) {
+            busy = false
+            message = "شروع سرویس اسکن ممکن نشد: ${e.localizedMessage ?: "خطای نامشخص"}"
         }
     }
 
@@ -141,8 +109,43 @@ private fun MemoraApp() {
         val saved = context.getSharedPreferences("memora_settings", android.content.Context.MODE_PRIVATE)
             .getString("last_tree_uri", null)
         if (saved != null) {
-            treeUri = Uri.parse(saved)
-            refresh()
+            val savedUri = Uri.parse(saved)
+            treeUri = savedUri
+            tree = ScanSnapshotStore.load(context)
+            val scanPrefs = context.getSharedPreferences(MemoryScanService.PREFS, android.content.Context.MODE_PRIVATE)
+            if (scanPrefs.getBoolean("busy", false)) {
+                busy = true
+                scanPaused = scanPrefs.getBoolean("paused", false)
+                scanProgress = scanPrefs.getFloat("progress", 0f)
+                scanProgressText = scanPrefs.getString("progressText", "اسکن در حال اجراست") ?: "اسکن در حال اجراست"
+            } else if (tree == null) refresh(savedUri)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val scanPrefs = context.getSharedPreferences(MemoryScanService.PREFS, android.content.Context.MODE_PRIVATE)
+        while (true) {
+            val status = scanPrefs.getString("status", "")
+            busy = scanPrefs.getBoolean("busy", false)
+            scanPaused = scanPrefs.getBoolean("paused", false)
+            scanProgress = scanPrefs.getFloat("progress", 0f)
+            scanProgressText = scanPrefs.getString("progressText", scanProgressText) ?: scanProgressText
+            if (status == "completed") {
+                val restored = withContext(Dispatchers.IO) { ScanSnapshotStore.load(context) }
+                if (restored != null && tree?.entries?.size != restored.entries.size) {
+                    tree = restored
+                    duplicateGroups = emptyList(); duplicateChecked = false
+                    similarGroups = emptyList(); similarChecked = false
+                    sameNameGroups = emptyList(); sameNameChecked = false
+                    cleanSelection = emptySet(); selected = emptySet()
+                    message = "اسکن کامل شد • ${restored.files.size} فایل"
+                }
+            } else if (status == "error") {
+                message = "خطا در اسکن: ${scanPrefs.getString("error", "دسترسی ممکن نیست")}"
+            } else if (status == "cancelled") {
+                message = "اسکن متوقف شد."
+            }
+            kotlinx.coroutines.delay(700)
         }
     }
 
@@ -161,7 +164,7 @@ private fun MemoraApp() {
                 duplicateChecked = false
                 cleanSelection = emptySet()
                 selected = emptySet()
-                refresh()
+                refresh(uri)
             } catch (e: Exception) {
                 message = "مجوز پوشه دریافت نشد: ${e.localizedMessage ?: ""}"
             }
@@ -196,8 +199,8 @@ private fun MemoraApp() {
             when (tab) {
                 0 -> HomeScreen(
                     tree = tree, busy = busy, message = message, scanProgress = scanProgress, scanProgressText = scanProgressText, scanPaused = scanPaused,
-                    onPause = { scanPaused = !scanPaused; pauseFlow.value = scanPaused },
-                    onCancelScan = { scanJob?.cancel() },
+                    onPause = { MemoryScanService.command(context, if (scanPaused) MemoryScanService.ACTION_RESUME else MemoryScanService.ACTION_PAUSE) },
+                    onCancelScan = { MemoryScanService.command(context, MemoryScanService.ACTION_CANCEL) },
                     onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
                     onFiles = { filter = "همه"; currentFolderPath = ""; tab = 1 },
                     onCategory = { filter = it; currentFolderPath = ""; tab = 1 },
