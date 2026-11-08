@@ -90,7 +90,7 @@ private fun MemoraApp() {
     var duplicateChecked by remember { mutableStateOf(false) }
     var cleanSelection by remember { mutableStateOf(setOf<Uri>()) }
 
-    fun refresh(requestedUri: Uri? = treeUri) {
+    fun refresh(requestedUri: Uri? = treeUri, fullScan: Boolean = false) {
         val uri = requestedUri ?: return
         if (busy) return
         busy = true
@@ -99,7 +99,7 @@ private fun MemoraApp() {
         scanProgressText = "آماده‌سازی اسکن در پس‌زمینه..."
         message = "اسکن حتی با خاموش‌شدن صفحه ادامه پیدا می‌کند."
         try {
-            MemoryScanService.command(context, MemoryScanService.ACTION_START, uri)
+            MemoryScanService.command(context, MemoryScanService.ACTION_START, uri, fullScan)
         } catch (e: Exception) {
             busy = false
             message = "شروع سرویس اسکن ممکن نشد: ${e.localizedMessage ?: "خطای نامشخص"}"
@@ -169,7 +169,7 @@ private fun MemoraApp() {
                 duplicateChecked = false
                 cleanSelection = emptySet()
                 selected = emptySet()
-                refresh(uri)
+                refresh(uri, fullScan = true)
             } catch (e: Exception) {
                 message = "مجوز پوشه دریافت نشد: ${e.localizedMessage ?: ""}"
             }
@@ -206,7 +206,7 @@ private fun MemoraApp() {
                     tree = tree, busy = busy, message = message, scanProgress = scanProgress, scanProgressText = scanProgressText, scanPaused = scanPaused,
                     onPause = { MemoryScanService.command(context, if (scanPaused) MemoryScanService.ACTION_RESUME else MemoryScanService.ACTION_PAUSE) },
                     onCancelScan = { MemoryScanService.command(context, MemoryScanService.ACTION_CANCEL) },
-                    onPick = { rootPicker.launch(null) }, onRefresh = { refresh() },
+                    onPick = { rootPicker.launch(null) }, onRefresh = { refresh() }, onFullRefresh = { refresh(fullScan = true) },
                     onFiles = { filter = "همه"; currentFolderPath = ""; tab = 1 },
                     onCategory = { filter = it; currentFolderPath = ""; tab = 1 },
                     onClean = { tab = 2 },
@@ -396,7 +396,7 @@ private fun ColumnScope.HomeScreen(
     tree: ManagedTree?, busy: Boolean, message: String,
     scanProgress: Float, scanProgressText: String, scanPaused: Boolean,
     onPause: () -> Unit, onCancelScan: () -> Unit,
-    onPick: () -> Unit, onRefresh: () -> Unit, onFiles: () -> Unit,
+    onPick: () -> Unit, onRefresh: () -> Unit, onFullRefresh: () -> Unit, onFiles: () -> Unit,
     onCategory: (String) -> Unit, onClean: () -> Unit, onApps: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -419,7 +419,8 @@ private fun ColumnScope.HomeScreen(
                 Text(if (tree == null) "برای اسکن کامل محدوده مجاز، حافظه داخلی یا microSD را انتخاب کن." else "${tree.files.size} فایل • ${tree.folders.size} پوشه • ${StorageScanner.formatBytes(tree.totalBytes)}", color = SoftText)
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = onPick, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text(if (busy) "در حال اسکن..." else "انتخاب حافظه / کارت SD") }
-                OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth(), enabled = tree != null && !busy) { Text("اسکن دوباره") }
+                OutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth(), enabled = tree != null && !busy) { Text("اسکن هوشمند (فقط تغییرات)") }
+                TextButton(onClick = onFullRefresh, modifier = Modifier.fillMaxWidth(), enabled = tree != null && !busy) { Text("اسکن کامل از ابتدا") }
                 if (busy) {
                     Spacer(Modifier.height(10.dp))
                     LinearProgressIndicator(progress = { scanProgress }, modifier = Modifier.fillMaxWidth(), color = Purple)
