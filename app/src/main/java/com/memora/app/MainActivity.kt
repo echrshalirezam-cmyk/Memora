@@ -373,11 +373,19 @@ private fun MemoraApp() {
             "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} مورد انتخاب‌شده (شامل محتویات پوشه‌های انتخابی) حذف شود؟", {
                 scope.launch {
                     val currentTree = tree
-                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, cleanSelection.toList()) else 0 to cleanSelection.size
-                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
+                    val selectedUris = cleanSelection.toList()
+                    val result = if (currentTree != null && treeUri != null) {
+                        TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris)
+                    } else 0 to selectedUris.size
                     cleanSelection = emptySet()
                     dialog = ""
-                    refresh()
+                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
+                    // Do not launch another scan when nothing was deleted.
+                    if (result.first > 0) {
+                        refresh(fullScan = false)
+                    } else {
+                        message = "هیچ موردی حذف نشد. مجوز نوشتن پوشه را بررسی کن؛ اسکن مجدد اجرا نشد."
+                    }
                 }
             }) { dialog = "" }
             "moveConfirm" -> ConfirmDialog("انتقال فایل‌ها", if (moveMode) "تعداد ${pendingTransferEntries.size} مورد (فایل/پوشه) به مقصد منتقل می‌شود." else "تعداد ${pendingTransferEntries.size} مورد (فایل/پوشه) در مقصد کپی می‌شود. اصل موارد باقی می‌ماند.", {
