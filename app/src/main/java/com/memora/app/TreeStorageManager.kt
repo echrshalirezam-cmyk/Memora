@@ -52,6 +52,8 @@ object TreeStorageManager {
         suspend fun walk(dir: DocumentFile, path: String) {
             pauseCheck()
             currentCoroutineContext().ensureActive()
+            // Publish activity before querying SAF; some SD-card providers take time here.
+            onProgress(visited, -1)
             val children = dir.listFiles()
             if (children.isEmpty() && dir.uri != root.uri) {
                 empty.add(ManagedEntry(dir.name ?: "بدون نام", 0L, true, dir.uri, null, dir.lastModified(), path))
@@ -66,7 +68,8 @@ object TreeStorageManager {
                 if (!folder) bytes += size
                 all.add(ManagedEntry(name, size, folder, child.uri, child.type, child.lastModified(), childPath))
                 visited++
-                if (visited % 10 == 0) onProgress(visited, -1)
+                // Update for every entry so the UI never appears frozen at zero.
+                onProgress(visited, -1)
                 if (folder) walk(child, childPath)
             }
         }
