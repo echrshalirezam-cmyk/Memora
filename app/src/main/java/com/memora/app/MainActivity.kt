@@ -563,6 +563,14 @@ private fun FilesScreen(
 }
 
 
+private data class CleanupData(
+    val large: List<ManagedEntry> = emptyList(),
+    val largeFolders: List<ManagedEntry> = emptyList(),
+    val empty: List<ManagedEntry> = emptyList(),
+    val tempFiles: List<ManagedEntry> = emptyList(),
+    val oldFiles: List<ManagedEntry> = emptyList()
+)
+
 @Composable
 private fun CleanupScreen(
     tree: ManagedTree?, duplicateGroups: List<List<ManagedEntry>>, similarGroups: List<List<ManagedEntry>>, sameNameGroups: List<List<ManagedEntry>>, busy: Boolean,
@@ -571,14 +579,30 @@ private fun CleanupScreen(
     onPick: () -> Unit, onRefresh: () -> Unit, onFindDuplicates: () -> Unit, onFindSimilar: () -> Unit, onFindSameNames: () -> Unit,
     onToggle: (Uri) -> Unit, onToggleAll: (List<ManagedEntry>) -> Unit, onOpen: (ManagedEntry) -> Unit, onDeleteSelected: () -> Unit, onApps: () -> Unit
 ) {
-    val large = tree?.largestFiles.orEmpty()
-    val largeFolders = tree?.largestFolders.orEmpty()
-    val empty = tree?.emptyFolders.orEmpty()
-    val duplicateItems = duplicateGroups.flatten()
-    val sameNameItems = sameNameGroups.flatten()
-    val similarItems = similarGroups.flatten()
-    val tempFiles = tree?.files.orEmpty().filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") }
-    val oldFiles = tree?.files.orEmpty().filter { it.modified > 0L && System.currentTimeMillis() - it.modified > 365L * 24L * 60L * 60L * 1000L }
+    // Build cleanup categories away from the UI thread and only when the scan tree changes.
+    val cleanupData by produceState(CleanupData(), tree) {
+        value = withContext(Dispatchers.Default) {
+            val entries = tree?.entries.orEmpty()
+            val files = entries.filter { !it.isDirectory }
+            val folders = entries.filter { it.isDirectory }
+            val cutoff = System.currentTimeMillis() - 365L * 24L * 60L * 60L * 1000L
+            CleanupData(
+                large = files.sortedByDescending { it.size }.take(30),
+                largeFolders = folders.asSequence().filter { it.size > 0L }.sortedByDescending { it.size }.take(20).toList(),
+                empty = tree?.emptyFolders.orEmpty(),
+                tempFiles = files.filter { it.name.substringAfterLast('.', "").lowercase() in setOf("tmp", "temp", "log", "cache", "bak", "old") },
+                oldFiles = files.filter { it.modified > 0L && it.modified < cutoff }
+            )
+        }
+    }
+    val large = cleanupData.large
+    val largeFolders = cleanupData.largeFolders
+    val empty = cleanupData.empty
+    val duplicateItems = remember(duplicateGroups) { duplicateGroups.flatten() }
+    val sameNameItems = remember(sameNameGroups) { sameNameGroups.flatten() }
+    val similarItems = remember(similarGroups) { similarGroups.flatten() }
+    val tempFiles = cleanupData.tempFiles
+    val oldFiles = cleanupData.oldFiles
     val sections = listOf("پوشه‌های خالی", "فایل‌های تکراری", "فایل‌های هم‌نام", "نام‌های مشابه", "فایل‌های موقت", "فایل‌های قدیمی", "فایل‌های حجیم", "پوشه‌های حجیم")
     var activeSection by remember { mutableStateOf("پوشه‌های خالی") }
     var shownCount by remember(activeSection) { mutableIntStateOf(80) }
@@ -592,7 +616,7 @@ private fun CleanupScreen(
         "فایل‌های حجیم" -> large
         else -> largeFolders
     }
-    val selectedEntries = tree?.entries.orEmpty().filter { it.uri in selection }
+    val selectedEntries = remember(tree, selection) { tree?.entries.orEmpty().filter { it.uri in selection } }
     val selectedTopLevel = selectedEntries.filterNot { entry ->
         selectedEntries.any { parent -> parent.isDirectory && entry.relativePath.startsWith(parent.relativePath + "/") }
     }
