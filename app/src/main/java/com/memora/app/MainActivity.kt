@@ -356,9 +356,9 @@ private fun MemoraApp() {
                         if (descendants.isNotEmpty()) TreeStorageManager.deleteMany(context, descendants)
                         TreeStorageManager.delete(context, item.uri)
                     } else TreeStorageManager.delete(context, item.uri)
-                    message = if (ok) "مورد حذف شد" else "حذف ممکن نشد؛ ممکن است دسترسی پوشه محدود باشد"
+                    message = if (ok) "مورد حذف شد" else "حذف انجام نشد؛ فایل یا پوشه دست‌نخورده باقی ماند. مجوز دسترسی را بررسی کن."
                     dialog = ""
-                    refresh()
+                    if (ok) refresh(fullScan = false)
                 } else dialog = ""
             }) { dialog = "" }
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
@@ -367,7 +367,12 @@ private fun MemoraApp() {
                     val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, selected.toList()) else 0 to selected.size
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     dialog = ""
-                    refresh()
+                    if (result.first > 0) {
+                        selected = emptySet()
+                        refresh(fullScan = false)
+                    } else {
+                        message = "هیچ موردی حذف نشد؛ اسکن مجدد اجرا نشد و انتخاب‌ها باقی ماندند."
+                    }
                 }
             }) { dialog = "" }
             "deleteClean" -> ConfirmDialog("حذف موارد پاک‌سازی", "تعداد ${cleanSelection.size} مورد انتخاب‌شده (شامل محتویات پوشه‌های انتخابی) حذف شود؟", {
@@ -377,14 +382,14 @@ private fun MemoraApp() {
                     val result = if (currentTree != null && treeUri != null) {
                         TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris)
                     } else 0 to selectedUris.size
-                    cleanSelection = emptySet()
                     dialog = ""
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
-                    // Do not launch another scan when nothing was deleted.
+                    // Keep the user's selection when deletion did not succeed.
                     if (result.first > 0) {
+                        cleanSelection = emptySet()
                         refresh(fullScan = false)
                     } else {
-                        message = "هیچ موردی حذف نشد. مجوز نوشتن پوشه را بررسی کن؛ اسکن مجدد اجرا نشد."
+                        message = "هیچ موردی حذف نشد؛ اسکن مجدد اجرا نشد و انتخاب‌ها باقی ماندند. مجوز پوشه را بررسی کن."
                     }
                 }
             }) { dialog = "" }
