@@ -327,7 +327,7 @@ private fun MemoraApp() {
             title = { Text("در حال حذف موارد") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LinearProgressIndicator(progress = { deleteProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    LinearProgressIndicator(progress = deleteProgress.coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
                     Text("${(deleteProgress * 100).toInt()}٪", color = Purple, fontWeight = FontWeight.Bold)
                     Text(deleteProgressText, color = SoftText, fontSize = 12.sp)
                 }
