@@ -89,6 +89,9 @@ private fun MemoraApp() {
     var duplicateBusy by remember { mutableStateOf(false) }
     var duplicateChecked by remember { mutableStateOf(false) }
     var cleanSelection by remember { mutableStateOf(setOf<Uri>()) }
+    var deleteBusy by remember { mutableStateOf(false) }
+    var deleteProgress by remember { mutableFloatStateOf(0f) }
+    var deleteProgressText by remember { mutableStateOf("آماده‌سازی حذف...") }
 
     fun refresh(requestedUri: Uri? = treeUri, fullScan: Boolean = false) {
         val uri = requestedUri ?: return
@@ -319,6 +322,19 @@ private fun MemoraApp() {
             }
         }
 
+        if (deleteBusy) AlertDialog(
+            onDismissRequest = { },
+            title = { Text("در حال حذف موارد") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LinearProgressIndicator(progress = { deleteProgress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                    Text("${(deleteProgress * 100).toInt()}٪", color = Purple, fontWeight = FontWeight.Bold)
+                    Text(deleteProgressText, color = SoftText, fontSize = 12.sp)
+                }
+            },
+            confirmButton = { }
+        )
+
         when (dialog) {
             "settings" -> AlertDialog(
                 onDismissRequest = { dialog = "" },
@@ -364,9 +380,19 @@ private fun MemoraApp() {
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
                     val currentTree = tree
-                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, selected.toList()) else 0 to selected.size
-                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
+                    val targets = selected.toList()
+                    deleteBusy = true
+                    deleteProgress = 0f
+                    deleteProgressText = "آماده‌سازی فهرست موارد حذف..."
                     dialog = ""
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(
+                        context, treeUri ?: Uri.EMPTY, currentTree, targets
+                    ) { done, total ->
+                        deleteProgress = if (total > 0) done.toFloat() / total else 0f
+                        deleteProgressText = "حذف‌شده/بررسی‌شده: $done از $total مورد • باقی‌مانده: ${(total - done).coerceAtLeast(0)}"
+                    } else 0 to targets.size
+                    deleteBusy = false
+                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     if (result.first > 0) {
                         selected = emptySet()
                         message = "${result.first} مورد حذف شد. می‌توانی موارد دیگری انتخاب کنی؛ اسکن را هر وقت خواستی دستی اجرا کن."
@@ -379,10 +405,17 @@ private fun MemoraApp() {
                 scope.launch {
                     val currentTree = tree
                     val selectedUris = cleanSelection.toList()
-                    val result = if (currentTree != null && treeUri != null) {
-                        TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris)
-                    } else 0 to selectedUris.size
+                    deleteBusy = true
+                    deleteProgress = 0f
+                    deleteProgressText = "آماده‌سازی فهرست موارد حذف..."
                     dialog = ""
+                    val result = if (currentTree != null && treeUri != null) {
+                        TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris) { done, total ->
+                            deleteProgress = if (total > 0) done.toFloat() / total else 0f
+                            deleteProgressText = "حذف‌شده/بررسی‌شده: $done از $total مورد • باقی‌مانده: ${(total - done).coerceAtLeast(0)}"
+                        }
+                    } else 0 to selectedUris.size
+                    deleteBusy = false
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     // Never rescan automatically after cleanup. The user may select more items.
                     if (result.first > 0) {
