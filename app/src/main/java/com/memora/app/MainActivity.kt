@@ -1,6 +1,11 @@
 package com.memora.app
 
 import android.content.Intent
+import android.app.AppOpsManager
+import android.app.usage.StorageStatsManager
+import android.os.Build
+import android.os.Process
+import android.os.storage.StorageManager
 import android.net.Uri
 import android.os.Environment
 import android.os.StatFs
@@ -89,6 +94,9 @@ private fun MemoraApp() {
     var duplicateBusy by remember { mutableStateOf(false) }
     var duplicateChecked by remember { mutableStateOf(false) }
     var cleanSelection by remember { mutableStateOf(setOf<Uri>()) }
+    var deleteBusy by remember { mutableStateOf(false) }
+    var deleteProgress by remember { mutableFloatStateOf(0f) }
+    var deleteProgressText by remember { mutableStateOf("آماده‌سازی حذف...") }
 
     fun refresh(requestedUri: Uri? = treeUri, fullScan: Boolean = false) {
         val uri = requestedUri ?: return
@@ -319,6 +327,19 @@ private fun MemoraApp() {
             }
         }
 
+        if (deleteBusy) AlertDialog(
+            onDismissRequest = { },
+            title = { Text("در حال حذف موارد") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LinearProgressIndicator(progress = deleteProgress.coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
+                    Text("${(deleteProgress * 100).toInt()}٪", color = Purple, fontWeight = FontWeight.Bold)
+                    Text(deleteProgressText, color = SoftText, fontSize = 12.sp)
+                }
+            },
+            confirmButton = { }
+        )
+
         when (dialog) {
             "settings" -> AlertDialog(
                 onDismissRequest = { dialog = "" },
@@ -364,9 +385,19 @@ private fun MemoraApp() {
             "deleteSelected" -> ConfirmDialog("حذف موارد انتخاب‌شده", if (selected.any { uri -> tree?.entries?.any { it.uri == uri && it.isDirectory } == true }) "تعداد ${selected.size} مورد انتخاب شده. محتویات پوشه‌های انتخاب‌شده نیز حذف خواهد شد. ادامه می‌دهی؟" else "تعداد ${selected.size} مورد برای حذف انتخاب شده. ادامه می‌دهی؟", {
                 scope.launch {
                     val currentTree = tree
-                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(context, treeUri ?: Uri.EMPTY, currentTree, selected.toList()) else 0 to selected.size
-                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
+                    val targets = selected.toList()
+                    deleteBusy = true
+                    deleteProgress = 0f
+                    deleteProgressText = "آماده‌سازی فهرست موارد حذف..."
                     dialog = ""
+                    val result = if (currentTree != null) TreeStorageManager.deleteSelection(
+                        context, treeUri ?: Uri.EMPTY, currentTree, targets
+                    ) { done, total ->
+                        deleteProgress = if (total > 0) done.toFloat() / total else 0f
+                        deleteProgressText = "حذف‌شده/بررسی‌شده: $done از $total مورد • باقی‌مانده: ${(total - done).coerceAtLeast(0)}"
+                    } else 0 to targets.size
+                    deleteBusy = false
+                    message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     if (result.first > 0) {
                         selected = emptySet()
                         message = "${result.first} مورد حذف شد. می‌توانی موارد دیگری انتخاب کنی؛ اسکن را هر وقت خواستی دستی اجرا کن."
@@ -379,10 +410,17 @@ private fun MemoraApp() {
                 scope.launch {
                     val currentTree = tree
                     val selectedUris = cleanSelection.toList()
-                    val result = if (currentTree != null && treeUri != null) {
-                        TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris)
-                    } else 0 to selectedUris.size
+                    deleteBusy = true
+                    deleteProgress = 0f
+                    deleteProgressText = "آماده‌سازی فهرست موارد حذف..."
                     dialog = ""
+                    val result = if (currentTree != null && treeUri != null) {
+                        TreeStorageManager.deleteSelection(context, treeUri!!, currentTree, selectedUris) { done, total ->
+                            deleteProgress = if (total > 0) done.toFloat() / total else 0f
+                            deleteProgressText = "حذف‌شده/بررسی‌شده: $done از $total مورد • باقی‌مانده: ${(total - done).coerceAtLeast(0)}"
+                        }
+                    } else 0 to selectedUris.size
+                    deleteBusy = false
                     message = "${result.first} مورد حذف شد؛ ${result.second} مورد ناموفق بود"
                     // Never rescan automatically after cleanup. The user may select more items.
                     if (result.first > 0) {
@@ -737,11 +775,51 @@ private fun CleanupItem(item: ManagedEntry, selection: Set<Uri>, onToggle: (Uri)
     }
 }
 
+private data class AppStorageInfo(
+    val appBytes: Long,
+    val dataBytes: Long,
+    val cacheBytes: Long
+) {
+    val totalBytes: Long get() = appBytes + dataBytes
+}
+
+private fun hasStorageStatsAccess(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+    val appOps = context.getSystemService(android.content.Context.APP_OPS_SERVICE) as AppOpsManager
+    return appOps.checkOpNoThrow(
+        AppOpsManager.OPSTR_GET_USAGE_STATS,
+        Process.myUid(),
+        context.packageName
+    ) == AppOpsManager.MODE_ALLOWED
+}
+
+private fun readAppStorageStats(context: android.content.Context, packageName: String): AppStorageInfo? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+    return try {
+        val manager = context.getSystemService(android.content.Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+        val stats = manager.queryStatsForPackage(
+            StorageManager.UUID_DEFAULT,
+            packageName,
+            Process.myUserHandle()
+        )
+        AppStorageInfo(stats.appBytes, stats.dataBytes, stats.cacheBytes)
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @Composable
 private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit, onPermissions: () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var appQuery by remember { mutableStateOf("") }
     var appListRevision by remember { mutableIntStateOf(0) }
+    var sortMode by remember { mutableStateOf("name") }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var storageAccess by remember { mutableStateOf(hasStorageStatsAccess(context)) }
+    var statsLoading by remember { mutableStateOf(false) }
+    var storageStats by remember { mutableStateOf<Map<String, AppStorageInfo>>(emptyMap()) }
+
     val apps = remember(appListRevision) {
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         context.packageManager.queryIntentActivities(launcherIntent, 0)
@@ -750,25 +828,105 @@ private fun AppsScreen(onAppSettings: () -> Unit, onStorageSettings: () -> Unit,
             .filter { it.packageName != context.packageName }
             .sortedBy { it.loadLabel(context.packageManager).toString().lowercase() }
     }
-    val visibleApps = apps.filter {
+
+    LaunchedEffect(appListRevision, storageAccess) {
+        if (storageAccess) {
+            statsLoading = true
+            storageStats = withContext(Dispatchers.IO) {
+                apps.mapNotNull { app ->
+                    readAppStorageStats(context, app.packageName)?.let { app.packageName to it }
+                }.toMap()
+            }
+            statsLoading = false
+        } else {
+            storageStats = emptyMap()
+        }
+    }
+
+    val filteredApps = apps.filter {
         it.loadLabel(context.packageManager).toString().contains(appQuery, true) ||
             it.packageName.contains(appQuery, true)
     }
+    val visibleApps = when (sortMode) {
+        "storage_desc" -> filteredApps.sortedByDescending { storageStats[it.packageName]?.totalBytes ?: -1L }
+        "storage_asc" -> filteredApps.sortedBy { storageStats[it.packageName]?.totalBytes ?: Long.MAX_VALUE }
+        "cache_desc" -> filteredApps.sortedByDescending { storageStats[it.packageName]?.cacheBytes ?: -1L }
+        "cache_asc" -> filteredApps.sortedBy { storageStats[it.packageName]?.cacheBytes ?: Long.MAX_VALUE }
+        else -> filteredApps.sortedBy { it.loadLabel(context.packageManager).toString().lowercase() }
+    }
+    val sortLabel = when (sortMode) {
+        "storage_desc" -> "حافظه: بیشترین به کمترین"
+        "storage_asc" -> "حافظه: کمترین به بیشترین"
+        "cache_desc" -> "کش: بیشترین به کمترین"
+        "cache_asc" -> "کش: کمترین به بیشترین"
+        else -> "نام برنامه"
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Text("مدیریت برنامه‌ها", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         Text("${apps.size} برنامه قابل مشاهده در فهرست برنامه‌های اجراشدنی", color = SoftText, fontSize = 11.sp)
         OutlinedTextField(value = appQuery, onValueChange = { appQuery = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("جستجوی برنامه") })
-        TextButton(onClick = { appListRevision++ }) { Text("بروزرسانی فهرست برنامه‌ها") }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) {
+                OutlinedButton(onClick = { sortMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("مرتب‌سازی: $sortLabel", fontSize = 11.sp)
+                }
+                DropdownMenu(expanded = sortMenuExpanded, onDismissRequest = { sortMenuExpanded = false }) {
+                    listOf(
+                        "name" to "نام برنامه",
+                        "storage_desc" to "حافظه: بیشترین به کمترین",
+                        "storage_asc" to "حافظه: کمترین به بیشترین",
+                        "cache_desc" to "کش: بیشترین به کمترین",
+                        "cache_asc" to "کش: کمترین به بیشترین"
+                    ).forEach { (value, label) ->
+                        DropdownMenuItem(text = { Text(label) }, onClick = {
+                            sortMode = value
+                            sortMenuExpanded = false
+                        })
+                    }
+                }
+            }
+            TextButton(onClick = {
+                storageAccess = hasStorageStatsAccess(context)
+                appListRevision++
+            }) { Text("بروزرسانی", fontSize = 11.sp) }
+        }
+        if (!storageAccess) {
+            Card(Modifier.fillMaxWidth().padding(vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF302451))) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("برای نمایش حجم حافظه و کش، دسترسی آمار مصرف لازم است.", color = White, fontSize = 12.sp)
+                    Text("این دسترسی فقط برای خواندن آمار ذخیره‌سازی برنامه‌ها استفاده می‌شود.", color = SoftText, fontSize = 10.sp)
+                    Button(onClick = {
+                        try { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                        catch (_: Exception) { context.startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("فعال‌کردن دسترسی آمار مصرف") }
+                }
+            }
+        } else {
+            Text(
+                if (statsLoading) "در حال خواندن حجم برنامه‌ها و کش..." else "آمار ذخیره‌سازی آماده است • برای تازه‌سازی، بروزرسانی را بزن",
+                color = SoftText, fontSize = 10.sp
+            )
+        }
         ActionCard("مدیریت همه برنامه‌ها", "مشاهده جزئیات، مجوزها و حذف از تنظیمات اندروید", onAppSettings)
         ActionCard("فضای ذخیره‌سازی دستگاه", "بررسی مصرف حافظه و ابزار آزادسازی فضای اندروید", onStorageSettings)
         ActionCard("مجوزهای MEMORA", "مدیریت دسترسی‌های همین برنامه", onPermissions)
         Spacer(Modifier.height(8.dp))
         visibleApps.forEach { app ->
             val label = app.loadLabel(context.packageManager).toString()
+            val stats = storageStats[app.packageName]
             Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(label, color = White, fontWeight = FontWeight.SemiBold)
                     Text(app.packageName, color = SoftText, fontSize = 10.sp)
+                    Text(
+                        "حافظه: ${stats?.let { StorageScanner.formatBytes(it.totalBytes) } ?: if (storageAccess) "نامشخص" else "نیازمند دسترسی"}",
+                        color = SoftText, fontSize = 11.sp
+                    )
+                    Text(
+                        "کش: ${stats?.let { StorageScanner.formatBytes(it.cacheBytes) } ?: if (storageAccess) "نامشخص" else "نیازمند دسترسی"}",
+                        color = Magenta, fontSize = 11.sp
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = {
                             val launch = context.packageManager.getLaunchIntentForPackage(app.packageName)

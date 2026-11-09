@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Memory vault outline -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A78BFA"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M34,27 L74,27 Q81,27 81,34 L81,74 Q81,81 74,81 L34,81 Q27,81 27,74 L27,34 Q27,27 34,27 Z" />
+    <!-- Three memory slots -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#E9D5FF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M40,43 L68,43 M40,54 L68,54 M40,65 L59,65" />
+    <!-- Neon status spark -->
+    <path
+        android:fillColor="#E879F9"
+        android:pathData="M72,60 L63,73 L70,73 L66,86 L80,69 L72,69 Z" />
+    <!-- Connector pins -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#C084FC"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M40,19 L40,25 M54,19 L54,25 M68,19 L68,25 M40,83 L40,89 M54,83 L54,89 M68,83 L68,89 M19,40 L25,40 M19,54 L25,54 M19,68 L25,68 M83,40 L89,40 M83,54 L89,54 M83,68 L89,68" />
+</vector>
