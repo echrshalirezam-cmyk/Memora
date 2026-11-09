@@ -197,7 +197,8 @@ object TreeStorageManager {
         context: Context,
         treeUri: Uri,
         tree: ManagedTree,
-        uris: List<Uri>
+        uris: List<Uri>,
+        onProgress: suspend (Int, Int) -> Unit = { _, _ -> }
     ): Pair<Int, Int> = withContext(Dispatchers.IO) {
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: return@withContext (0 to uris.size)
@@ -208,9 +209,20 @@ object TreeStorageManager {
                     entry.relativePath.startsWith(parent.relativePath + "/")
             }
         }
-        var deleted = 0
-        var failed = 0
 
+        // Build a post-order list so a folder is attempted only after its contents.
+        val nodes = mutableListOf<DocumentFile>()
+        var discoveryFailures = 0
+        fun collect(node: DocumentFile) {
+            if (node.isDirectory) {
+                val children = try { node.listFiles().toList() } catch (_: Exception) {
+                    discoveryFailures++
+                    emptyList()
+                }
+                children.forEach { collect(it) }
+            }
+            nodes.add(node)
+        }
         fun resolve(path: String): DocumentFile? {
             var current = root
             for (part in path.split("/").filter { it.isNotBlank() }) {
@@ -218,40 +230,25 @@ object TreeStorageManager {
             }
             return current
         }
-
-        fun deleteUri(uri: Uri): Boolean {
-            val direct = try {
-                DocumentsContract.deleteDocument(context.contentResolver, uri)
-            } catch (_: Exception) {
-                false
-            }
-            if (direct) return true
-            return try { DocumentFile.fromSingleUri(context, uri)?.delete() == true } catch (_: Exception) { false }
-        }
-
-        fun removeRecursively(node: DocumentFile): Boolean {
-            var allOk = true
-            if (node.isDirectory) {
-                val children = try { node.listFiles().toList() } catch (_: Exception) {
-                    failed++
-                    return false
-                }
-                children.forEach { child ->
-                    if (!removeRecursively(child)) allOk = false
-                }
-            }
-            if (deleteUri(node.uri)) {
-                deleted++
-            } else {
-                failed++
-                allOk = false
-            }
-            return allOk
-        }
-
         topLevel.forEach { entry ->
             val node = resolve(entry.relativePath)
-            if (node == null) failed++ else removeRecursively(node)
+            if (node == null) discoveryFailures++ else collect(node)
+        }
+
+        val total = nodes.size
+        var processed = 0
+        var deleted = 0
+        var failed = discoveryFailures
+        onProgress(0, total)
+        nodes.forEach { node ->
+            val ok = try {
+                DocumentsContract.deleteDocument(context.contentResolver, node.uri)
+            } catch (_: Exception) {
+                try { node.delete() } catch (_: Exception) { false }
+            }
+            if (ok) deleted++ else failed++
+            processed++
+            onProgress(processed, total)
         }
         deleted to failed
     }
